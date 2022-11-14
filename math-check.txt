@@ -1,0 +1,18 @@
+*Free		{1, 10, 19, 14}
+Mushrooms 	{20, 6, 3, 11}
+Pepperoni	{4, 2, 16, 12}
+Onions	{18, 15, 7, 9}
+Grn Pepper	{5, 13, 17, 8}
+
+Hypothetical orders
+Mushrooms only 	(Possible)
+Onions only	 	(Possible)
+
+More complex orders... (Possible)
+Exactly 3 pepperoni
+>2 onions
+
+Even more complex orders... (Possible)
+(x Any) Mushrooms
+(x 3) Pepperoni
+(> 2) Onions
