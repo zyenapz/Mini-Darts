@@ -1,14 +1,30 @@
-use bevy::{prelude::*, input::mouse::MouseMotion, render::camera::RenderTarget};
+use std::ops::Sub;
+
+use bevy::{prelude::*, render::camera::RenderTarget, sprite::MaterialMesh2dBundle};
 
 #[derive(Component)]
 struct MainCamera;
 
+struct Ingredient(String);
+
+struct Section {
+    start: f32,
+    end: f32,
+    ingredient: Ingredient
+}
+
+struct Ring {
+    start: f32,
+    end: f32
+}
+
 const BOARD_CENTER: Vec2 = Vec2::new(0., 0.);
 const BOARD_RADIUS: f32 = 300_f32;
+const SECTION_ARC: f32 = 18_f32; // 20 sections divided by 360
 
-// Board's bounds (normalized, with respect to board's center)
-const R_BE:f32 = 0.07; // Bullseye
-const R_HB:f32 = 0.11; // Half-Bullseye
+// Board's rings' bounds (normalized, with respect to board's center)
+const R_BE:f32 = 0.02; // Bullseye
+const R_HB:f32 = 0.04; // Half-Bullseye
 const R_TN:f32 = 0.29; // Triple-near
 const R_TF:f32 = 0.31; // Triple-far
 const R_DN:f32 = 0.48; // Double-near
@@ -18,11 +34,21 @@ fn main() {
     App::new().add_plugins(DefaultPlugins).add_startup_system(setup).add_system(cursor_position).run();
 }
 
-fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
+fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<ColorMaterial>>) {
     commands.spawn(Camera2dBundle::default()).insert(MainCamera);
     commands.spawn(SpriteBundle {
-        texture: asset_server.load("smiley_Face.png"),
-        transform: Transform {scale: Vec3 { x: 0.2, y: 0.2, z: 1. }, ..default() },
+        texture: asset_server.load("dart.png"),
+        transform: Transform {
+            translation: Vec3 {x: BOARD_CENTER.x, y: BOARD_CENTER.y, z: 0.},
+            scale: Vec3 { x: 1.2, y: 1.2, z: 1. }, ..default() },
+        ..default()
+    });
+
+    commands.spawn(MaterialMesh2dBundle {
+        mesh: meshes.add(shape::Circle::new(5.).into()).into(),
+        material: materials.add(ColorMaterial::from(Color::PINK)),
+        transform: Transform::from_translation(Vec3::new(-0., 0., 1.)),
         ..default()
     });
 }
@@ -63,20 +89,28 @@ fn cursor_position(
 
         //eprintln!("World coords: {}/{}", world_pos.x, world_pos.y);
 
-        let x1 = BOARD_CENTER.x;
-        let y1 = BOARD_CENTER.y;
+        // --------- Unused, for posterity
+        //let x1 = BOARD_CENTER.x;
+        //let y1 = BOARD_CENTER.y;
 
-        let x2 = world_pos.x;
-        let y2 = world_pos.y;
+        //let x2 = world_pos.x;
+        //let y2 = world_pos.y;
 
-        let degrees = (y1.atan2(x1) - y2.atan2(x2)).to_degrees();
-        //eprintln!("Angle: {}", degrees);
+        //let board_origin = Vec2{x: 0., y:0.};
+
+        //let degrees = ((y1.atan2(x1) - y2.atan2(x2)).to_degrees() + (SECTION_ARC / 2_f32) + 180_f32) % 360_f32;
+        //let degrees = ((board_mouse.y.atan2(board_mouse.x) - board_origin.y.atan2(board_origin.x)).to_degrees() + (SECTION_ARC / 2_f32) + 180_f32) % 360_f32;
+        
+        // ---------
+
+        // calculate angle between board's center and mouse pos, then offset it so that angle 0 starts on a wire or line
+        let board_mouse = BOARD_CENTER.sub(world_pos); // Boardcenter to mouse vector
+        let degrees = (board_mouse.y.atan2(board_mouse.x).to_degrees() + (SECTION_ARC / 2_f32) + 180_f32) % 360_f32;
 
         let distance = BOARD_CENTER.distance(world_pos);
 
         let q = normalize(distance, 0., BOARD_RADIUS);
-        eprintln!("Distance: {}, Normalized: {}", distance, q);
-        
+        eprintln!("Angle: {}, Distance: {}, Normalized distance: {}", degrees, distance, q);
         
     }
 }
@@ -84,3 +118,4 @@ fn cursor_position(
 fn normalize(val: f32, min: f32, max: f32) -> f32 {
     return (val - min) / (max - min);
 }
+
