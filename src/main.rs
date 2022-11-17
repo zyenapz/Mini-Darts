@@ -1,13 +1,17 @@
 use core::fmt;
-use std::ops::Sub;
+use std::ops::{Sub, Mul};
 
-use bevy::{prelude::*, render::camera::RenderTarget, sprite::MaterialMesh2dBundle};
+use bevy::{prelude::*, render::camera::RenderTarget, sprite::MaterialMesh2dBundle, input::mouse::MouseMotion};
+use rand::Rng;
 
 #[derive(Component)]
 struct MainCamera;
 
 #[derive(Resource)]
 struct Sections(Vec<Section>);
+
+#[derive(Resource)]
+struct MouseOnScreen(bool);
 
 #[derive(Clone, Copy)]
 enum Ingredient {
@@ -43,10 +47,8 @@ impl fmt::Display for Section {
     }
 }
 
-struct Ring {
-    start: f32,
-    end: f32
-}
+#[derive(Component)]
+struct Crosshair;
 
 const BOARD_CENTER: Vec2 = Vec2::new(0., 0.);
 const BOARD_RADIUS: f32 = 300_f32;
@@ -60,27 +62,50 @@ const R_TRIFAR:f32 = 0.31; // Triple-far
 const R_DOBNEA:f32 = 0.48; // Double-near
 const R_DOBFAR:f32 = 0.50; // Double-far
 
+const SCALE_FACTOR:f32 = 1.0;
+const CROSSHAIR_RNG_RANGE: f32 = 1.0;
+
 fn main() {
-    App::new().add_plugins(DefaultPlugins).add_startup_system(setup).add_system(cursor_position).run();
+    App::new().add_plugins(DefaultPlugins.set(WindowPlugin {
+        window: WindowDescriptor {
+            title: "Pizza Darts".to_string(),
+            width: 800. * SCALE_FACTOR,
+            height: 600. * SCALE_FACTOR,
+            ..default()
+        },
+        ..default()
+    }))
+    .add_startup_system(setup)
+    .add_system(cursor_position)
+    .run();
 }
 
-fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<ColorMaterial>>) {
+fn setup(
+    mut commands: Commands, 
+    asset_server: Res<AssetServer>, 
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+    mut windows: ResMut<Windows>    
+) {
+    windows.get_primary_mut().unwrap().set_cursor_visibility(false);
     commands.spawn(Camera2dBundle::default()).insert(MainCamera);
     commands.spawn(SpriteBundle {
         texture: asset_server.load("dart.png"),
         transform: Transform {
             translation: Vec3 {x: BOARD_CENTER.x, y: BOARD_CENTER.y, z: 0.},
-            scale: Vec3 { x: 1.2, y: 1.2, z: 1. }, ..default() },
+            //scale: Vec3 { x: 1., y: 1., z: 1. }, 
+            ..default() 
+        },
         ..default()
     });
 
+    // Create crosshair
     commands.spawn(MaterialMesh2dBundle {
-        mesh: meshes.add(shape::Circle::new(5.).into()).into(),
-        material: materials.add(ColorMaterial::from(Color::PINK)),
-        transform: Transform::from_translation(Vec3::new(-0., 0., 1.)),
+        mesh: meshes.add(shape::Circle::new(3.).into()).into(),
+        material: materials.add(ColorMaterial::from(Color::BLUE)),
+        transform: Transform::from_translation(Vec3::new(0., 0., 1.)),
         ..default()
-    });
+    }).insert(Crosshair);
 
     // Create sections
     let mut sec: Vec<Section> = Vec::new();
@@ -106,6 +131,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut meshes: Res
     }
 
     commands.insert_resource(Sections(sec));
+    commands.insert_resource(MouseOnScreen(true));
 
 
 }
@@ -117,8 +143,10 @@ fn cursor_position(
    q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
    sections: Res<Sections>,
    buttons: Res<Input<MouseButton>>,
+   mut crosshair: Query<(&mut Transform), With<Crosshair>>,
+   mut motion_evr: EventReader<MouseMotion>,
+   mut mouse_onscreen: ResMut<MouseOnScreen>,
 ) {
-    
     // get the camera info and transform
     // assuming there is exactly one main camera entity, so query::single() is OK
     let (camera, camera_transform) = q_camera.single();
@@ -132,6 +160,9 @@ fn cursor_position(
 
     // check if the cursor is inside the window and get its position
     if let Some(screen_pos) = wnd.cursor_position() {
+
+     
+
         // get the size of the window
         let window_size = Vec2::new(wnd.width() as f32, wnd.height() as f32);
 
@@ -145,8 +176,23 @@ fn cursor_position(
         let world_pos = ndc_to_world.project_point3(ndc.extend(-1.0));
 
         // reduce it to a 2D value
-        let world_pos: Vec2 = world_pos.truncate();
+        let mut world_pos: Vec2 = world_pos.truncate();
 
+        // check if mouse is back on screen
+           if(mouse_onscreen.0 == false) {
+            crosshair.single_mut().translation = world_pos.extend(1.);
+            mouse_onscreen.0 = true
+        }
+
+        // move crosshair
+        for evt in motion_evr.iter() {
+            crosshair.single_mut().translation.x += evt.delta.x % 10.;
+            crosshair.single_mut().translation.y += -evt.delta.y % 10.;
+        }
+
+        crosshair.single_mut().translation.x += rand::thread_rng().gen_range(-CROSSHAIR_RNG_RANGE..CROSSHAIR_RNG_RANGE);
+        crosshair.single_mut().translation.y += rand::thread_rng().gen_range(-CROSSHAIR_RNG_RANGE..CROSSHAIR_RNG_RANGE);
+        
         //eprintln!("World coords: {}/{}", world_pos.x, world_pos.y);
 
         // --------- Unused, for posterity
@@ -162,8 +208,6 @@ fn cursor_position(
         //let degrees = ((board_mouse.y.atan2(board_mouse.x) - board_origin.y.atan2(board_origin.x)).to_degrees() + (SECTION_ARC / 2_f32) + 180_f32) % 360_f32;
         
         // ---------
-
-        
 
         if buttons.just_pressed(MouseButton::Left) {
             // - calculate angle between board's center and mouse pos, then offset it so that angle 0 starts on score the right wire of score '20'
@@ -207,8 +251,9 @@ fn cursor_position(
             }
             
         }
-        
-        
+    }
+    else {
+       mouse_onscreen.0 = false;
     }
 }
 
