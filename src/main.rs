@@ -1,3 +1,4 @@
+use core::fmt;
 use std::ops::Sub;
 
 use bevy::{prelude::*, render::camera::RenderTarget, sprite::MaterialMesh2dBundle};
@@ -5,12 +6,40 @@ use bevy::{prelude::*, render::camera::RenderTarget, sprite::MaterialMesh2dBundl
 #[derive(Component)]
 struct MainCamera;
 
-struct Ingredient(String);
+#[derive(Resource)]
+struct Sections(Vec<Section>);
+
+#[derive(Clone, Copy)]
+enum Ingredient {
+    FREE,
+    MUSHROOM,
+    PEPPERONI,
+    ONIONS,
+    GARLIC
+}
+
+impl fmt::Display for Ingredient {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Ingredient::FREE => write!(f, "{}", "FREE"),
+            Ingredient::MUSHROOM => write!(f, "{}", "MUSHROOM"),
+            Ingredient::PEPPERONI => write!(f, "{}", "PEPPERONI"),
+            Ingredient::ONIONS => write!(f, "{}", "ONIONS"),
+            Ingredient::GARLIC => write!(f, "{}", "GARLIC"),
+        }
+    }
+}
 
 struct Section {
     start: f32,
     end: f32,
     ingredient: Ingredient
+}
+
+impl fmt::Display for Section {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Start: {}, End: {}, Ingred: {}", self.start, self.end, self.ingredient)
+    }
 }
 
 struct Ring {
@@ -20,7 +49,7 @@ struct Ring {
 
 const BOARD_CENTER: Vec2 = Vec2::new(0., 0.);
 const BOARD_RADIUS: f32 = 300_f32;
-const SECTION_ARC: f32 = 18_f32; // 20 sections divided by 360
+const SECTION_ARC: f32 = 18_f32; // 20 sections divided by 360 = 18
 
 // Board's rings' bounds (normalized, with respect to board's center)
 const R_BE:f32 = 0.02; // Bullseye
@@ -41,7 +70,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut meshes: Res
         texture: asset_server.load("dart.png"),
         transform: Transform {
             translation: Vec3 {x: BOARD_CENTER.x, y: BOARD_CENTER.y, z: 0.},
-            scale: Vec3 { x: 1.2, y: 1.2, z: 1. }, ..default() },
+            scale: Vec3 { x: 1., y: 1., z: 1. }, ..default() },
         ..default()
     });
 
@@ -51,14 +80,44 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut meshes: Res
         transform: Transform::from_translation(Vec3::new(-0., 0., 1.)),
         ..default()
     });
+
+    // Create sections
+    let mut sec: Vec<Section> = Vec::new();
+    let ingredients: Vec<Ingredient> = vec![
+        Ingredient::FREE,
+        Ingredient::MUSHROOM,
+        Ingredient::PEPPERONI,
+        Ingredient::ONIONS,
+        Ingredient::GARLIC,
+    ];
+
+    for i in 0..20{
+        let s = Section {
+            start: i as f32 * 18_f32,
+            end: (i as f32 * 18_f32) + 18_f32,
+            ingredient: ingredients[i % ingredients.len()],
+        };
+
+        sec.push(s);
+    }
+
+    commands.insert_resource(Sections(sec));
+
+
 }
 
 fn cursor_position(
    // need to get window dimensions
    wnds: Res<Windows>,
    // query to get camera transform
-   q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>
+   q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
+   sections: Res<Sections>
 ) {
+    
+    // for s in &sections.0 {
+    //     println!("{}", s);
+    // }
+
     // get the camera info and transform
     // assuming there is exactly one main camera entity, so query::single() is OK
     let (camera, camera_transform) = q_camera.single();
@@ -103,9 +162,10 @@ fn cursor_position(
         
         // ---------
 
-        // calculate angle between board's center and mouse pos, then offset it so that angle 0 starts on a wire or line
+        // calculate angle between board's center and mouse pos, then offset it so that angle 0 starts on score the right wire of score '20'
         let board_mouse = BOARD_CENTER.sub(world_pos); // Boardcenter to mouse vector
-        let degrees = (board_mouse.y.atan2(board_mouse.x).to_degrees() + (SECTION_ARC / 2_f32) + 180_f32) % 360_f32;
+        let offset = 459_f32; // Just tweaked the number until I got this
+        let degrees = (board_mouse.y.atan2(board_mouse.x).to_degrees() + offset) % 360_f32;
 
         let distance = BOARD_CENTER.distance(world_pos);
 
