@@ -11,21 +11,21 @@ struct Sections(Vec<Section>);
 
 #[derive(Clone, Copy)]
 enum Ingredient {
-    FREE,
-    MUSHROOM,
-    PEPPERONI,
-    ONIONS,
-    GARLIC
+    Free,
+    Mushroom,
+    Pepperoni,
+    Onions,
+    Garlic
 }
 
 impl fmt::Display for Ingredient {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Ingredient::FREE => write!(f, "{}", "FREE"),
-            Ingredient::MUSHROOM => write!(f, "{}", "MUSHROOM"),
-            Ingredient::PEPPERONI => write!(f, "{}", "PEPPERONI"),
-            Ingredient::ONIONS => write!(f, "{}", "ONIONS"),
-            Ingredient::GARLIC => write!(f, "{}", "GARLIC"),
+            Ingredient::Free => write!(f, "{}", "FREE"),
+            Ingredient::Mushroom => write!(f, "{}", "MUSHROOM"),
+            Ingredient::Pepperoni => write!(f, "{}", "PEPPERONI"),
+            Ingredient::Onions => write!(f, "{}", "ONIONS"),
+            Ingredient::Garlic => write!(f, "{}", "GARLIC"),
         }
     }
 }
@@ -33,7 +33,8 @@ impl fmt::Display for Ingredient {
 struct Section {
     start: f32,
     end: f32,
-    ingredient: Ingredient
+    ingredient: Ingredient,
+    score: i32,
 }
 
 impl fmt::Display for Section {
@@ -52,12 +53,12 @@ const BOARD_RADIUS: f32 = 300_f32;
 const SECTION_ARC: f32 = 18_f32; // 20 sections divided by 360 = 18
 
 // Board's rings' bounds (normalized, with respect to board's center)
-const R_BE:f32 = 0.02; // Bullseye
-const R_HB:f32 = 0.04; // Half-Bullseye
-const R_TN:f32 = 0.29; // Triple-near
-const R_TF:f32 = 0.31; // Triple-far
-const R_DN:f32 = 0.48; // Double-near
-const R_DF:f32 = 0.50; // Double-far
+const R_BULEYE:f32 = 0.02; // Bullseye
+const R_HALBEY:f32 = 0.04; // Half-Bullseye
+const R_TRINEA:f32 = 0.29; // Triple-near
+const R_TRIFAR:f32 = 0.31; // Triple-far
+const R_DOBNEA:f32 = 0.48; // Double-near
+const R_DOBFAR:f32 = 0.50; // Double-far
 
 fn main() {
     App::new().add_plugins(DefaultPlugins).add_startup_system(setup).add_system(cursor_position).run();
@@ -70,7 +71,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut meshes: Res
         texture: asset_server.load("dart.png"),
         transform: Transform {
             translation: Vec3 {x: BOARD_CENTER.x, y: BOARD_CENTER.y, z: 0.},
-            scale: Vec3 { x: 1., y: 1., z: 1. }, ..default() },
+            scale: Vec3 { x: 1.2, y: 1.2, z: 1. }, ..default() },
         ..default()
     });
 
@@ -84,18 +85,21 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut meshes: Res
     // Create sections
     let mut sec: Vec<Section> = Vec::new();
     let ingredients: Vec<Ingredient> = vec![
-        Ingredient::FREE,
-        Ingredient::MUSHROOM,
-        Ingredient::PEPPERONI,
-        Ingredient::ONIONS,
-        Ingredient::GARLIC,
+        Ingredient::Mushroom,
+        Ingredient::Pepperoni,
+        Ingredient::Onions,
+        Ingredient::Garlic,
+        Ingredient::Free,
     ];
+
+    let scores = vec![20, 5, 12, 9, 14, 11, 8, 16, 7, 19, 3, 17, 2, 15, 10, 6, 13, 4, 18, 1];
 
     for i in 0..20{
         let s = Section {
             start: i as f32 * 18_f32,
             end: (i as f32 * 18_f32) + 18_f32,
             ingredient: ingredients[i % ingredients.len()],
+            score: scores[i % scores.len()]
         };
 
         sec.push(s);
@@ -111,13 +115,10 @@ fn cursor_position(
    wnds: Res<Windows>,
    // query to get camera transform
    q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
-   sections: Res<Sections>
+   sections: Res<Sections>,
+   buttons: Res<Input<MouseButton>>,
 ) {
     
-    // for s in &sections.0 {
-    //     println!("{}", s);
-    // }
-
     // get the camera info and transform
     // assuming there is exactly one main camera entity, so query::single() is OK
     let (camera, camera_transform) = q_camera.single();
@@ -162,20 +163,59 @@ fn cursor_position(
         
         // ---------
 
-        // calculate angle between board's center and mouse pos, then offset it so that angle 0 starts on score the right wire of score '20'
-        let board_mouse = BOARD_CENTER.sub(world_pos); // Boardcenter to mouse vector
-        let offset = 459_f32; // Just tweaked the number until I got this
-        let degrees = (board_mouse.y.atan2(board_mouse.x).to_degrees() + offset) % 360_f32;
+        
 
-        let distance = BOARD_CENTER.distance(world_pos);
+        if buttons.just_pressed(MouseButton::Left) {
+            // - calculate angle between board's center and mouse pos, then offset it so that angle 0 starts on score the right wire of score '20'
+            let board_mouse = BOARD_CENTER.sub(world_pos); // Boardcenter to mouse vector
+            let offset = 459_f32; // Just tweaked the number until I got this
+            let degrees = (board_mouse.y.atan2(board_mouse.x).to_degrees() + offset) % 360_f32;
 
-        let q = normalize(distance, 0., BOARD_RADIUS);
-        eprintln!("Angle: {}, Distance: {}, Normalized distance: {}", degrees, distance, q);
+            let distance = BOARD_CENTER.distance(world_pos);
+
+            let n_dist = round_to_two(
+                normalize(distance, 0., BOARD_RADIUS)
+            );
+            eprintln!("Angle: {}, Distance: {}, Normalized distance: {}", degrees, distance, n_dist);
+            
+            // - Determine score
+            if n_dist <= R_BULEYE {
+                eprintln!("Hit bullseye worth 50 pts!")
+            }
+            else if n_dist <= R_HALBEY {
+                eprintln!("Hit half bullseye worth 25 pts!")
+            }
+            else if n_dist <= R_DOBFAR {
+                for s in &sections.0 {
+                
+                    let mut multiplier = 1;
+    
+                    if (R_TRINEA..=R_TRIFAR).contains(&n_dist) {
+                        multiplier = 3;
+                    }
+                    else if (R_DOBNEA..=R_DOBFAR).contains(&n_dist) {
+                        multiplier = 2;
+                    }
+    
+                    if (s.start..s.end).contains(&degrees) {
+                        eprintln!("Hit {} worth {} pts! ", s.ingredient, s.score * multiplier);
+                    }
+                }
+            }
+            else {
+                eprintln!("Missed!");
+            }
+            
+        }
+        
         
     }
 }
 
 fn normalize(val: f32, min: f32, max: f32) -> f32 {
-    return (val - min) / (max - min);
+    (val - min) / (max - min)
 }
 
+fn round_to_two(val: f32) -> f32 {
+    (val * 100.0).round() / 100.0
+}
