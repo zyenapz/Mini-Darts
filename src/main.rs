@@ -1,7 +1,7 @@
 use core::fmt;
 use std::ops::{Sub, Mul};
 
-use bevy::{prelude::*, render::camera::RenderTarget, sprite::MaterialMesh2dBundle, input::mouse::MouseMotion};
+use bevy::{prelude::*, render::{camera::RenderTarget, render_resource::{FilterMode, SamplerDescriptor}, texture::ImageSampler}, sprite::MaterialMesh2dBundle, input::mouse::MouseMotion};
 use rand::Rng;
 
 #[derive(Component)]
@@ -50,7 +50,7 @@ impl fmt::Display for Section {
 #[derive(Component)]
 struct Crosshair;
 
-const BOARD_CENTER: Vec2 = Vec2::new(0., 0.);
+const BOARD_CENTER: Vec2 = Vec2::new(50., 25.);
 const BOARD_RADIUS: f32 = 300_f32;
 const SECTION_ARC: f32 = 18_f32; // 20 sections divided by 360 = 18
 
@@ -62,19 +62,23 @@ const R_TRIFAR:f32 = 0.31; // Triple-far
 const R_DOBNEA:f32 = 0.48; // Double-near
 const R_DOBFAR:f32 = 0.50; // Double-far
 
-const SCALE_FACTOR:f32 = 1.0;
-const CROSSHAIR_RNG_RANGE: f32 = 1.0;
+const SCALE_FACTOR:f32 = 2.0;
+const CROSSHAIR_RNG_RANGE: f32 = 1.5;
 
 fn main() {
-    App::new().add_plugins(DefaultPlugins.set(WindowPlugin {
-        window: WindowDescriptor {
-            title: "Pizza Darts".to_string(),
-            width: 800. * SCALE_FACTOR,
-            height: 600. * SCALE_FACTOR,
+    App::new().add_plugins(
+        DefaultPlugins.set(WindowPlugin {
+            window: WindowDescriptor {
+                title: "Pizza Darts".to_string(),
+                width: 400.,
+                height: 300.,
+                scale_factor_override: Some(SCALE_FACTOR.into()),
+                ..default()
+            },
             ..default()
-        },
-        ..default()
-    }))
+            }
+        ).set(ImagePlugin::default_nearest()) // For pixel-art style
+    )
     .add_startup_system(setup)
     .add_system(cursor_position)
     .run();
@@ -87,13 +91,23 @@ fn setup(
     mut materials: ResMut<Assets<ColorMaterial>>,
     mut windows: ResMut<Windows>    
 ) {
+
     windows.get_primary_mut().unwrap().set_cursor_visibility(false);
     commands.spawn(Camera2dBundle::default()).insert(MainCamera);
     commands.spawn(SpriteBundle {
-        texture: asset_server.load("dart.png"),
+        texture: asset_server.load("dart_board.png"),
         transform: Transform {
             translation: Vec3 {x: BOARD_CENTER.x, y: BOARD_CENTER.y, z: 0.},
-            //scale: Vec3 { x: 1., y: 1., z: 1. }, 
+            scale: Vec3 { x: 1., y: 1., z: 0. }, 
+            ..default() 
+        },
+        ..default()
+    });
+    commands.spawn(SpriteBundle {
+        texture: asset_server.load("dart_frame.png"),
+        transform: Transform {
+            translation: Vec3 {x: BOARD_CENTER.x, y: BOARD_CENTER.y, z: 0.},
+            scale: Vec3 { x: 1., y: 1., z: 0. }, 
             ..default() 
         },
         ..default()
@@ -132,7 +146,6 @@ fn setup(
 
     commands.insert_resource(Sections(sec));
     commands.insert_resource(MouseOnScreen(true));
-
 
 }
 
@@ -211,11 +224,11 @@ fn cursor_position(
 
         if buttons.just_pressed(MouseButton::Left) {
             // - calculate angle between board's center and mouse pos, then offset it so that angle 0 starts on score the right wire of score '20'
-            let board_mouse = BOARD_CENTER.sub(world_pos); // Boardcenter to mouse vector
+            let board_crosshair = BOARD_CENTER.sub(crosshair.single_mut().translation.truncate()); // Boardcenter to mouse vector
             let offset = 459_f32; // Just tweaked the number until I got this
-            let degrees = (board_mouse.y.atan2(board_mouse.x).to_degrees() + offset) % 360_f32;
+            let degrees = (board_crosshair.y.atan2(board_crosshair.x).to_degrees() + offset) % 360_f32;
 
-            let distance = BOARD_CENTER.distance(world_pos);
+            let distance = BOARD_CENTER.distance(crosshair.single_mut().translation.truncate());
 
             let n_dist = round_to_two(
                 normalize(distance, 0., BOARD_RADIUS)
