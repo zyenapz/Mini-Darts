@@ -50,7 +50,7 @@ impl fmt::Display for Section {
 #[derive(Component)]
 struct Crosshair;
 
-const BOARD_CENTER: Vec2 = Vec2::new(50., 25.);
+const BOARD_CENTER: Vec2 = Vec2::new(0., 0.);
 const BOARD_RADIUS: f32 = 300_f32;
 const SECTION_ARC: f32 = 18_f32; // 20 sections divided by 360 = 18
 
@@ -62,16 +62,16 @@ const R_TRIFAR:f32 = 0.31; // Triple-far
 const R_DOBNEA:f32 = 0.48; // Double-near
 const R_DOBFAR:f32 = 0.50; // Double-far
 
-const SCALE_FACTOR:f32 = 2.0;
+const SCALE_FACTOR:f32 = 4.0;
 const CROSSHAIR_RNG_RANGE: f32 = 1.5;
 
 fn main() {
     App::new().add_plugins(
         DefaultPlugins.set(WindowPlugin {
             window: WindowDescriptor {
-                title: "Pizza Darts".to_string(),
-                width: 400.,
-                height: 300.,
+                title: "Mini Darts".to_string(),
+                width: 200.,
+                height: 150.,
                 scale_factor_override: Some(SCALE_FACTOR.into()),
                 ..default()
             },
