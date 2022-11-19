@@ -13,37 +13,38 @@ struct Sections(Vec<Section>);
 #[derive(Resource)]
 struct MouseOnScreen(bool);
 
-#[derive(Clone, Copy)]
-enum Ingredient {
-    Free,
-    Mushroom,
-    Pepperoni,
-    Onions,
-    Garlic
-}
+// #[derive(Clone, Copy)]
+// enum Ingredient {
+//     Free,
+//     Mushroom,
+//     Pepperoni,
+//     Onions,
+//     Garlic
+// }
 
-impl fmt::Display for Ingredient {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Ingredient::Free => write!(f, "{}", "FREE"),
-            Ingredient::Mushroom => write!(f, "{}", "MUSHROOM"),
-            Ingredient::Pepperoni => write!(f, "{}", "PEPPERONI"),
-            Ingredient::Onions => write!(f, "{}", "ONIONS"),
-            Ingredient::Garlic => write!(f, "{}", "GARLIC"),
-        }
-    }
-}
+// impl fmt::Display for Ingredient {
+//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//         match self {
+//             Ingredient::Free => write!(f, "{}", "FREE"),
+//             Ingredient::Mushroom => write!(f, "{}", "MUSHROOM"),
+//             Ingredient::Pepperoni => write!(f, "{}", "PEPPERONI"),
+//             Ingredient::Onions => write!(f, "{}", "ONIONS"),
+//             Ingredient::Garlic => write!(f, "{}", "GARLIC"),
+//         }
+//     }
+// }
 
 struct Section {
     start: f32,
     end: f32,
-    ingredient: Ingredient,
+    // ingredient: Ingredient,
     score: i32,
 }
 
 impl fmt::Display for Section {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Start: {}, End: {}, Ingred: {}", self.start, self.end, self.ingredient)
+        // write!(f, "Start: {}, End: {}, Ingred: {}", self.start, self.end, self.ingredient)
+        write!(f, "Start: {}, End: {}", self.start, self.end)
     }
 }
 
@@ -57,8 +58,8 @@ const SECTION_ARC: f32 = 18_f32; // 20 sections divided by 360 = 18
 // Board's rings' bounds (normalized, with respect to board's center)
 const R_BULEYE:f32 = 0.02; // Bullseye
 const R_HALBEY:f32 = 0.04; // Half-Bullseye
-const R_TRINEA:f32 = 0.29; // Triple-near
-const R_TRIFAR:f32 = 0.31; // Triple-far
+const R_TRINEA:f32 = 0.29; // Treble-near
+const R_TRIFAR:f32 = 0.31; // Treble-far
 const R_DOBNEA:f32 = 0.48; // Double-near
 const R_DOBFAR:f32 = 0.50; // Double-far
 
@@ -115,7 +116,7 @@ fn setup(
 
     // Create crosshair
     commands.spawn(MaterialMesh2dBundle {
-        mesh: meshes.add(shape::Circle::new(3.).into()).into(),
+        mesh: meshes.add(shape::Circle::new(1.).into()).into(),
         material: materials.add(ColorMaterial::from(Color::BLUE)),
         transform: Transform::from_translation(Vec3::new(0., 0., 1.)),
         ..default()
@@ -123,13 +124,13 @@ fn setup(
 
     // Create sections
     let mut sec: Vec<Section> = Vec::new();
-    let ingredients: Vec<Ingredient> = vec![
-        Ingredient::Mushroom,
-        Ingredient::Pepperoni,
-        Ingredient::Onions,
-        Ingredient::Garlic,
-        Ingredient::Free,
-    ];
+    // let ingredients: Vec<Ingredient> = vec![
+    //     Ingredient::Mushroom,
+    //     Ingredient::Pepperoni,
+    //     Ingredient::Onions,
+    //     Ingredient::Garlic,
+    //     Ingredient::Free,
+    // ];
 
     let scores = vec![20, 5, 12, 9, 14, 11, 8, 16, 7, 19, 3, 17, 2, 15, 10, 6, 13, 4, 18, 1];
 
@@ -137,7 +138,7 @@ fn setup(
         let s = Section {
             start: i as f32 * 18_f32,
             end: (i as f32 * 18_f32) + 18_f32,
-            ingredient: ingredients[i % ingredients.len()],
+            // ingredient: ingredients[i % ingredients.len()],
             score: scores[i % scores.len()]
         };
 
@@ -255,7 +256,8 @@ fn cursor_position(
                     }
     
                     if (s.start..s.end).contains(&degrees) {
-                        eprintln!("Hit {} worth {} pts! ", s.ingredient, s.score * multiplier);
+                        //eprintln!("Hit {} worth {} pts! ", s.ingredient, s.score * multiplier);
+                        eprintln!("Hit {} worth {} pts! ", s.score, s.score * multiplier);
                     }
                 }
             }
