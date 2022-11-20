@@ -10,6 +10,9 @@ struct MainCamera;
 #[derive(Component)]
 struct Crosshair;
 
+#[derive(Component)]
+struct DebugText;
+
 #[derive(Resource)]
 struct Sections(Vec<Section>);
 
@@ -74,6 +77,7 @@ fn main() {
         .add_startup_system(setup)
         .add_system(move_crosshair)
         .add_system(shoot_dart)
+        .add_system(update_texts)
         .run();
 }
 
@@ -165,7 +169,31 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut windows: Re
     commands.insert_resource(ScoreBoard {
         player: 301,
         opponent: 301,
-    })
+    });
+
+    // Create text
+    commands.spawn((
+        // Create a TextBundle that has a Text with a list of sections.
+        TextBundle::from_sections([
+            TextSection::new(
+                "Player: 301",
+                TextStyle {
+                    font: asset_server.load("fonts/Minecraft.ttf"),
+                    font_size: 12.0,
+                    color: Color::WHITE,
+                },
+            ),
+            TextSection::new(
+                "\nOpponent: 301",
+                TextStyle {
+                    font: asset_server.load("fonts/Minecraft.ttf"),
+                    font_size: 12.0,
+                    color: Color::WHITE,
+                },
+            ),
+        ]),
+        DebugText,
+    ));
 }
 
 fn move_crosshair(
@@ -246,8 +274,8 @@ fn shoot_dart(
                 let mut multiplier = 1;
 
                 let landed_treble = (R_TRINEA..=R_TRIFAR).contains(&n_dist);
-                let landed_double = (R_DOBNEA..=R_DOBFAR).contains(&n_dist); 
-                let landed_single = (section.start..section.end).contains(&degrees); 
+                let landed_double = (R_DOBNEA..=R_DOBFAR).contains(&n_dist);
+                let landed_single = (section.start..section.end).contains(&degrees);
 
                 if landed_treble {
                     multiplier = 3;
@@ -257,12 +285,29 @@ fn shoot_dart(
 
                 if landed_single {
                     r_scoreboard.player -= section.score * multiplier;
-                    eprintln!("Hit {} worth {} pts! ", section.score, section.score * multiplier);
+                    eprintln!(
+                        "Hit {} worth {} pts! ",
+                        section.score,
+                        section.score * multiplier
+                    );
                 }
             }
         } else {
             eprintln!("Missed!");
         }
+    }
+}
+
+fn update_texts(
+    mut q_debug: Query<&mut Text, With<DebugText>>,
+    r_scoreboard: Res<ScoreBoard>,
+) {
+    let p_score = r_scoreboard.player;
+    let o_score = r_scoreboard.opponent;
+
+    for mut text in &mut q_debug {
+        text.sections[0].value = format!("Player: {p_score:2}");
+        text.sections[1].value = format!("\nOpponent: {o_score:2}");
     }
 }
 
