@@ -1,11 +1,14 @@
 use core::fmt;
-use std::ops::{Sub, Mul};
+use std::ops::*;
 
-use bevy::{prelude::*, render::{camera::RenderTarget, render_resource::{FilterMode, SamplerDescriptor}, texture::ImageSampler}, sprite::MaterialMesh2dBundle, input::mouse::MouseMotion};
+use bevy::{input::mouse::MouseMotion, prelude::*};
 use rand::Rng;
 
 #[derive(Component)]
 struct MainCamera;
+
+#[derive(Component)]
+struct Crosshair;
 
 #[derive(Resource)]
 struct Sections(Vec<Section>);
@@ -13,133 +16,141 @@ struct Sections(Vec<Section>);
 #[derive(Resource)]
 struct MouseOnScreen(bool);
 
-// #[derive(Clone, Copy)]
-// enum Ingredient {
-//     Free,
-//     Mushroom,
-//     Pepperoni,
-//     Onions,
-//     Garlic
-// }
+#[derive(Resource)]
+struct AimIsFocused(bool);
 
-// impl fmt::Display for Ingredient {
-//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-//         match self {
-//             Ingredient::Free => write!(f, "{}", "FREE"),
-//             Ingredient::Mushroom => write!(f, "{}", "MUSHROOM"),
-//             Ingredient::Pepperoni => write!(f, "{}", "PEPPERONI"),
-//             Ingredient::Onions => write!(f, "{}", "ONIONS"),
-//             Ingredient::Garlic => write!(f, "{}", "GARLIC"),
-//         }
-//     }
-// }
+#[derive(Resource)]
+struct MousePosition(Vec2);
+
+#[derive(Resource)]
+struct ScoreBoard {
+    player: i32,
+    opponent: i32,
+}
 
 struct Section {
     start: f32,
     end: f32,
-    // ingredient: Ingredient,
     score: i32,
 }
 
 impl fmt::Display for Section {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // write!(f, "Start: {}, End: {}, Ingred: {}", self.start, self.end, self.ingredient)
         write!(f, "Start: {}, End: {}", self.start, self.end)
     }
 }
 
-#[derive(Component)]
-struct Crosshair;
-
-const BOARD_CENTER: Vec2 = Vec2::new(0., 0.);
+const BOARD_CENTER: Vec2 = Vec2::new(-25., 0.);
 const BOARD_RADIUS: f32 = 300_f32;
 const SECTION_ARC: f32 = 18_f32; // 20 sections divided by 360 = 18
 
 // Board's rings' bounds (normalized, with respect to board's center)
-const R_BULEYE:f32 = 0.02; // Bullseye
-const R_HALBEY:f32 = 0.04; // Half-Bullseye
-const R_TRINEA:f32 = 0.29; // Treble-near
-const R_TRIFAR:f32 = 0.31; // Treble-far
-const R_DOBNEA:f32 = 0.48; // Double-near
-const R_DOBFAR:f32 = 0.50; // Double-far
+const R_BULEYE: f32 = 0.02; // Bullseye
+const R_HALBEY: f32 = 0.04; // Half-Bullseye
+const R_TRINEA: f32 = 0.29; // Treble-near
+const R_TRIFAR: f32 = 0.31; // Treble-far
+const R_DOBNEA: f32 = 0.48; // Double-near
+const R_DOBFAR: f32 = 0.50; // Double-far
 
-const SCALE_FACTOR:f32 = 4.0;
+const SCALE_FACTOR: f32 = 4.0;
 const CROSSHAIR_RNG_RANGE: f32 = 1.5;
 
 fn main() {
-    App::new().add_plugins(
-        DefaultPlugins.set(WindowPlugin {
-            window: WindowDescriptor {
-                title: "Mini Darts".to_string(),
-                width: 200.,
-                height: 150.,
-                scale_factor_override: Some(SCALE_FACTOR.into()),
-                ..default()
-            },
-            ..default()
-            }
-        ).set(ImagePlugin::default_nearest()) // For pixel-art style
-    )
-    .add_startup_system(setup)
-    .add_system(cursor_position)
-    .run();
+    App::new()
+        .add_plugins(
+            DefaultPlugins
+                .set(WindowPlugin {
+                    window: WindowDescriptor {
+                        title: "Mini Darts".to_string(),
+                        width: 200.,
+                        height: 150.,
+                        scale_factor_override: Some(SCALE_FACTOR.into()),
+                        ..default()
+                    },
+                    ..default()
+                })
+                .set(ImagePlugin::default_nearest()), // For pixel-art style
+        )
+        .add_startup_system(setup)
+        .add_system(move_crosshair)
+        .add_system(shoot_dart)
+        .run();
 }
 
-fn setup(
-    mut commands: Commands, 
-    asset_server: Res<AssetServer>, 
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<ColorMaterial>>,
-    mut windows: ResMut<Windows>    
-) {
-
-    windows.get_primary_mut().unwrap().set_cursor_visibility(false);
+fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut windows: ResMut<Windows>) {
+    windows
+        .get_primary_mut()
+        .unwrap()
+        .set_cursor_visibility(false);
     commands.spawn(Camera2dBundle::default()).insert(MainCamera);
     commands.spawn(SpriteBundle {
-        texture: asset_server.load("dart_board.png"),
+        texture: asset_server.load("board.png"),
         transform: Transform {
-            translation: Vec3 {x: BOARD_CENTER.x, y: BOARD_CENTER.y, z: 0.},
-            scale: Vec3 { x: 1., y: 1., z: 0. }, 
-            ..default() 
+            translation: Vec3 {
+                x: BOARD_CENTER.x,
+                y: BOARD_CENTER.y,
+                z: 1.,
+            },
+            scale: Vec3 {
+                x: 1.,
+                y: 1.,
+                z: 0.,
+            },
+            ..default()
         },
         ..default()
     });
     commands.spawn(SpriteBundle {
-        texture: asset_server.load("dart_frame.png"),
+        texture: asset_server.load("frame.png"),
         transform: Transform {
-            translation: Vec3 {x: BOARD_CENTER.x, y: BOARD_CENTER.y, z: 0.},
-            scale: Vec3 { x: 1., y: 1., z: 0. }, 
-            ..default() 
+            translation: Vec3 {
+                x: BOARD_CENTER.x,
+                y: BOARD_CENTER.y,
+                z: 0.,
+            },
+            scale: Vec3 {
+                x: 1.,
+                y: 1.,
+                z: 0.,
+            },
+            ..default()
         },
         ..default()
     });
 
     // Create crosshair
-    commands.spawn(MaterialMesh2dBundle {
-        mesh: meshes.add(shape::Circle::new(1.).into()).into(),
-        material: materials.add(ColorMaterial::from(Color::BLUE)),
-        transform: Transform::from_translation(Vec3::new(0., 0., 1.)),
-        ..default()
-    }).insert(Crosshair);
+    commands
+        .spawn(SpriteBundle {
+            texture: asset_server.load("crosshair.png"),
+            transform: Transform {
+                translation: Vec3 {
+                    x: BOARD_CENTER.x,
+                    y: BOARD_CENTER.y,
+                    z: 2.,
+                },
+                scale: Vec3 {
+                    x: 1.,
+                    y: 1.,
+                    z: 0.,
+                },
+                ..default()
+            },
+            ..default()
+        })
+        .insert(Crosshair);
 
     // Create sections
     let mut sec: Vec<Section> = Vec::new();
-    // let ingredients: Vec<Ingredient> = vec![
-    //     Ingredient::Mushroom,
-    //     Ingredient::Pepperoni,
-    //     Ingredient::Onions,
-    //     Ingredient::Garlic,
-    //     Ingredient::Free,
-    // ];
+    let scores = vec![
+        20, 5, 12, 9, 14, 11, 8, 16, 7, 19, 3, 17, 2, 15, 10, 6, 13, 4, 18, 1,
+    ];
 
-    let scores = vec![20, 5, 12, 9, 14, 11, 8, 16, 7, 19, 3, 17, 2, 15, 10, 6, 13, 4, 18, 1];
-
-    for i in 0..20{
+    for i in 0..20 {
         let s = Section {
             start: i as f32 * 18_f32,
             end: (i as f32 * 18_f32) + 18_f32,
             // ingredient: ingredients[i % ingredients.len()],
-            score: scores[i % scores.len()]
+            score: scores[i % scores.len()],
         };
 
         sec.push(s);
@@ -147,128 +158,111 @@ fn setup(
 
     commands.insert_resource(Sections(sec));
     commands.insert_resource(MouseOnScreen(true));
-
+    commands.insert_resource(MousePosition(Vec2 {
+        x: BOARD_CENTER.x,
+        y: BOARD_CENTER.y,
+    }));
+    commands.insert_resource(ScoreBoard {
+        player: 301,
+        opponent: 301,
+    })
 }
 
-fn cursor_position(
-   // need to get window dimensions
-   wnds: Res<Windows>,
-   // query to get camera transform
-   q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
-   sections: Res<Sections>,
-   buttons: Res<Input<MouseButton>>,
-   mut crosshair: Query<(&mut Transform), With<Crosshair>>,
-   mut motion_evr: EventReader<MouseMotion>,
-   mut mouse_onscreen: ResMut<MouseOnScreen>,
+fn move_crosshair(
+    r_windows: Res<Windows>,
+    q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
+    mut q_crosshair: Query<&mut Transform, With<Crosshair>>,
+    mut evr_motion: EventReader<MouseMotion>,
+    mut r_mouse_onscreen: ResMut<MouseOnScreen>,
 ) {
-    // get the camera info and transform
-    // assuming there is exactly one main camera entity, so query::single() is OK
     let (camera, camera_transform) = q_camera.single();
+    let window = r_windows.get_primary().unwrap();
 
-    // get the window that the camera is displaying to (or the primary window)
-    let wnd = if let RenderTarget::Window(id) = camera.target {
-        wnds.get(id).unwrap()
-    } else {
-        wnds.get_primary().unwrap()
-    };
+    // Check if the cursor is inside the window and get its position
+    if let Some(screen_pos) = window.cursor_position() {
+        // Get the size of the window
+        let window_size = Vec2::new(window.width() as f32, window.height() as f32);
 
-    // check if the cursor is inside the window and get its position
-    if let Some(screen_pos) = wnd.cursor_position() {
-
-     
-
-        // get the size of the window
-        let window_size = Vec2::new(wnd.width() as f32, wnd.height() as f32);
-
-        // convert screen position [0..resolution] to ndc [-1..1] (gpu coordinates)
+        // Convert screen position [0..resolution] to ndc [-1..1] (gpu coordinates)
         let ndc = (screen_pos / window_size) * 2.0 - Vec2::ONE;
 
-        // matrix for undoing the projection and camera transform
-        let ndc_to_world = camera_transform.compute_matrix() * camera.projection_matrix().inverse();
+        // Matrix for undoing the projection and camera transform
+        let matrix = camera_transform.compute_matrix() * camera.projection_matrix().inverse();
 
-        // use it to convert ndc to world-space coordinates
-        let world_pos = ndc_to_world.project_point3(ndc.extend(-1.0));
+        // Use it to convert ndc to world-space coordinates
+        let world_pos = matrix.project_point3(ndc.extend(-1.0)).truncate();
 
-        // reduce it to a 2D value
-        let mut world_pos: Vec2 = world_pos.truncate();
-
-        // check if mouse is back on screen
-           if(mouse_onscreen.0 == false) {
-            crosshair.single_mut().translation = world_pos.extend(1.);
-            mouse_onscreen.0 = true
+        // Check if mouse is back on screen
+        if r_mouse_onscreen.0 == false {
+            q_crosshair.single_mut().translation = world_pos.extend(1.);
+            r_mouse_onscreen.0 = true
         }
 
-        // move crosshair
-        for evt in motion_evr.iter() {
-            crosshair.single_mut().translation.x += evt.delta.x % 10.;
-            crosshair.single_mut().translation.y += -evt.delta.y % 10.;
+        // Move crosshair
+        for evt in evr_motion.iter() {
+            q_crosshair.single_mut().translation.x += evt.delta.x % 5.;
+            q_crosshair.single_mut().translation.y += -evt.delta.y % 5.;
         }
 
-        crosshair.single_mut().translation.x += rand::thread_rng().gen_range(-CROSSHAIR_RNG_RANGE..CROSSHAIR_RNG_RANGE);
-        crosshair.single_mut().translation.y += rand::thread_rng().gen_range(-CROSSHAIR_RNG_RANGE..CROSSHAIR_RNG_RANGE);
-        
-        //eprintln!("World coords: {}/{}", world_pos.x, world_pos.y);
+        // Shake the crosshair
+        q_crosshair.single_mut().translation.x +=
+            rand::thread_rng().gen_range(-CROSSHAIR_RNG_RANGE..CROSSHAIR_RNG_RANGE);
+        q_crosshair.single_mut().translation.y +=
+            rand::thread_rng().gen_range(-CROSSHAIR_RNG_RANGE..CROSSHAIR_RNG_RANGE);
+    } else {
+        r_mouse_onscreen.0 = false;
+    }
+}
 
-        // --------- Unused, for posterity
-        //let x1 = BOARD_CENTER.x;
-        //let y1 = BOARD_CENTER.y;
+fn shoot_dart(
+    r_mbuttons: Res<Input<MouseButton>>,
+    r_sections: Res<Sections>,
+    mut r_scoreboard: ResMut<ScoreBoard>,
+    mut q_crosshair: Query<&mut Transform, With<Crosshair>>,
+) {
+    if r_mbuttons.just_pressed(MouseButton::Left) {
+        // Calculate angle between board's center and mouse pos, then offset it so that angle 0 starts on score the right wire of score '20'
+        let board_crosshair = BOARD_CENTER.sub(q_crosshair.single_mut().translation.truncate()); // Boardcenter to mouse vector
+        let offset = 459_f32; // Just tweaked the number until I got this
+        let degrees = (board_crosshair.y.atan2(board_crosshair.x).to_degrees() + offset) % 360_f32;
 
-        //let x2 = world_pos.x;
-        //let y2 = world_pos.y;
+        let distance = BOARD_CENTER.distance(q_crosshair.single_mut().translation.truncate());
 
-        //let board_origin = Vec2{x: 0., y:0.};
+        let n_dist = round_to_two(normalize(distance, 0., BOARD_RADIUS));
+        eprintln!(
+            "Angle: {}, Distance: {}, Normalized distance: {}",
+            degrees, distance, n_dist
+        );
 
-        //let degrees = ((y1.atan2(x1) - y2.atan2(x2)).to_degrees() + (SECTION_ARC / 2_f32) + 180_f32) % 360_f32;
-        //let degrees = ((board_mouse.y.atan2(board_mouse.x) - board_origin.y.atan2(board_origin.x)).to_degrees() + (SECTION_ARC / 2_f32) + 180_f32) % 360_f32;
-        
-        // ---------
+        // Calculate score
+        if n_dist <= R_BULEYE {
+            r_scoreboard.player -= 50;
+            eprintln!("Hit bullseye worth 50 pts!")
+        } else if n_dist <= R_HALBEY {
+            r_scoreboard.player -= 25;
+            eprintln!("Hit half bullseye worth 25 pts!")
+        } else if n_dist <= R_DOBFAR {
+            for section in &r_sections.0 {
+                let mut multiplier = 1;
 
-        if buttons.just_pressed(MouseButton::Left) {
-            // - calculate angle between board's center and mouse pos, then offset it so that angle 0 starts on score the right wire of score '20'
-            let board_crosshair = BOARD_CENTER.sub(crosshair.single_mut().translation.truncate()); // Boardcenter to mouse vector
-            let offset = 459_f32; // Just tweaked the number until I got this
-            let degrees = (board_crosshair.y.atan2(board_crosshair.x).to_degrees() + offset) % 360_f32;
+                let landed_treble = (R_TRINEA..=R_TRIFAR).contains(&n_dist);
+                let landed_double = (R_DOBNEA..=R_DOBFAR).contains(&n_dist); 
+                let landed_single = (section.start..section.end).contains(&degrees); 
 
-            let distance = BOARD_CENTER.distance(crosshair.single_mut().translation.truncate());
+                if landed_treble {
+                    multiplier = 3;
+                } else if landed_double {
+                    multiplier = 2;
+                }
 
-            let n_dist = round_to_two(
-                normalize(distance, 0., BOARD_RADIUS)
-            );
-            eprintln!("Angle: {}, Distance: {}, Normalized distance: {}", degrees, distance, n_dist);
-            
-            // - Determine score
-            if n_dist <= R_BULEYE {
-                eprintln!("Hit bullseye worth 50 pts!")
-            }
-            else if n_dist <= R_HALBEY {
-                eprintln!("Hit half bullseye worth 25 pts!")
-            }
-            else if n_dist <= R_DOBFAR {
-                for s in &sections.0 {
-                
-                    let mut multiplier = 1;
-    
-                    if (R_TRINEA..=R_TRIFAR).contains(&n_dist) {
-                        multiplier = 3;
-                    }
-                    else if (R_DOBNEA..=R_DOBFAR).contains(&n_dist) {
-                        multiplier = 2;
-                    }
-    
-                    if (s.start..s.end).contains(&degrees) {
-                        //eprintln!("Hit {} worth {} pts! ", s.ingredient, s.score * multiplier);
-                        eprintln!("Hit {} worth {} pts! ", s.score, s.score * multiplier);
-                    }
+                if landed_single {
+                    r_scoreboard.player -= section.score * multiplier;
+                    eprintln!("Hit {} worth {} pts! ", section.score, section.score * multiplier);
                 }
             }
-            else {
-                eprintln!("Missed!");
-            }
-            
+        } else {
+            eprintln!("Missed!");
         }
-    }
-    else {
-       mouse_onscreen.0 = false;
     }
 }
 
