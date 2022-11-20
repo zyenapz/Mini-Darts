@@ -7,8 +7,12 @@ use rand::Rng;
 #[derive(Component)]
 struct MainCamera;
 
-#[derive(Component)]
-struct Crosshair;
+#[derive(Component, Default)]
+struct Crosshair {
+    distance: f32,
+    n_dist: f32,
+    degrees: f32,
+}
 
 #[derive(Component)]
 struct DebugText;
@@ -48,12 +52,12 @@ const BOARD_RADIUS: f32 = 300_f32;
 const SECTION_ARC: f32 = 18_f32; // 20 sections divided by 360 = 18
 
 // Board's rings' bounds (normalized, with respect to board's center)
-const R_BULEYE: f32 = 0.02; // Bullseye
-const R_HALBEY: f32 = 0.04; // Half-Bullseye
-const R_TRINEA: f32 = 0.29; // Treble-near
-const R_TRIFAR: f32 = 0.31; // Treble-far
-const R_DOBNEA: f32 = 0.48; // Double-near
-const R_DOBFAR: f32 = 0.50; // Double-far
+const R_BULEYE: f32 = 0.01; // Bullseye
+const R_HALBEY: f32 = 0.02; // Half-Bullseye
+const R_TRINEA: f32 = 0.10; // Treble-near
+const R_TRIFAR: f32 = 0.11; // Treble-far
+const R_DOBNEA: f32 = 0.17; // Double-near
+const R_DOBFAR: f32 = 0.18; // Double-far
 
 const SCALE_FACTOR: f32 = 4.0;
 const CROSSHAIR_RNG_RANGE: f32 = 1.5;
@@ -141,7 +145,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut windows: Re
             },
             ..default()
         })
-        .insert(Crosshair);
+        .insert(Crosshair {..default()});
 
     // Create sections
     let mut sec: Vec<Section> = Vec::new();
@@ -179,7 +183,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut windows: Re
                 "Player: 301",
                 TextStyle {
                     font: asset_server.load("fonts/Minecraft.ttf"),
-                    font_size: 12.0,
+                    font_size: 5.0,
                     color: Color::WHITE,
                 },
             ),
@@ -187,11 +191,28 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut windows: Re
                 "\nOpponent: 301",
                 TextStyle {
                     font: asset_server.load("fonts/Minecraft.ttf"),
-                    font_size: 12.0,
+                    font_size: 5.0,
                     color: Color::WHITE,
                 },
             ),
-        ]),
+            TextSection::new(
+                "\nDistance: 0 | n_dist: 0 | Degrees: 0",
+                TextStyle {
+                    font: asset_server.load("fonts/Minecraft.ttf"),
+                    font_size: 5.0,
+                    color: Color::WHITE,
+                },
+            ),
+        ])
+        .with_style(Style {
+            position_type: PositionType::Absolute,
+            position: UiRect {
+                top: Val::Px(15.0),
+                right: Val::Px(15.0),
+                ..default()
+            },
+            ..default()
+        }),
         DebugText,
     ));
 }
@@ -228,15 +249,19 @@ fn move_crosshair(
 
         // Move crosshair
         for evt in evr_motion.iter() {
-            q_crosshair.single_mut().translation.x += evt.delta.x % 5.;
-            q_crosshair.single_mut().translation.y += -evt.delta.y % 5.;
+            // q_crosshair.single_mut().translation.x += evt.delta.x % 5.;
+            // q_crosshair.single_mut().translation.y += -evt.delta.y % 5.;
+            
         }
 
+        q_crosshair.single_mut().translation.x = world_pos.x;
+        q_crosshair.single_mut().translation.y = world_pos.y;
+
         // Shake the crosshair
-        q_crosshair.single_mut().translation.x +=
-            rand::thread_rng().gen_range(-CROSSHAIR_RNG_RANGE..CROSSHAIR_RNG_RANGE);
-        q_crosshair.single_mut().translation.y +=
-            rand::thread_rng().gen_range(-CROSSHAIR_RNG_RANGE..CROSSHAIR_RNG_RANGE);
+        // q_crosshair.single_mut().translation.x +=
+        //     rand::thread_rng().gen_range(-CROSSHAIR_RNG_RANGE..CROSSHAIR_RNG_RANGE);
+        // q_crosshair.single_mut().translation.y +=
+        //     rand::thread_rng().gen_range(-CROSSHAIR_RNG_RANGE..CROSSHAIR_RNG_RANGE);
     } else {
         r_mouse_onscreen.0 = false;
     }
@@ -246,22 +271,28 @@ fn shoot_dart(
     r_mbuttons: Res<Input<MouseButton>>,
     r_sections: Res<Sections>,
     mut r_scoreboard: ResMut<ScoreBoard>,
-    mut q_crosshair: Query<&mut Transform, With<Crosshair>>,
+    mut q_crosshair: Query<(&mut Transform, &mut Crosshair)>,
 ) {
+    let mut crosshair = q_crosshair.single_mut();
+
+    // Calculate angle between board's center and mouse pos, then offset it so that angle 0 starts on score the right wire of score '20'
+    let board_crosshair = BOARD_CENTER.sub(crosshair.0.translation.truncate()); // Boardcenter to mouse vector
+    let offset = 459_f32; // Just tweaked the number until I got this
+    let degrees = (board_crosshair.y.atan2(board_crosshair.x).to_degrees() + offset) % 360_f32;
+
+    let distance = BOARD_CENTER.distance(crosshair.0.translation.truncate());
+
+    let n_dist = round_to_two(normalize(distance, 0., BOARD_RADIUS));
+    eprintln!(
+        "Angle: {}, Distance: {}, Normalized distance: {}",
+        degrees, distance, n_dist
+    );
+
+    crosshair.1.degrees = degrees;
+    crosshair.1.n_dist = n_dist;
+    crosshair.1.distance = distance;
+
     if r_mbuttons.just_pressed(MouseButton::Left) {
-        // Calculate angle between board's center and mouse pos, then offset it so that angle 0 starts on score the right wire of score '20'
-        let board_crosshair = BOARD_CENTER.sub(q_crosshair.single_mut().translation.truncate()); // Boardcenter to mouse vector
-        let offset = 459_f32; // Just tweaked the number until I got this
-        let degrees = (board_crosshair.y.atan2(board_crosshair.x).to_degrees() + offset) % 360_f32;
-
-        let distance = BOARD_CENTER.distance(q_crosshair.single_mut().translation.truncate());
-
-        let n_dist = round_to_two(normalize(distance, 0., BOARD_RADIUS));
-        eprintln!(
-            "Angle: {}, Distance: {}, Normalized distance: {}",
-            degrees, distance, n_dist
-        );
-
         // Calculate score
         if n_dist <= R_BULEYE {
             r_scoreboard.player -= 50;
@@ -301,13 +332,19 @@ fn shoot_dart(
 fn update_texts(
     mut q_debug: Query<&mut Text, With<DebugText>>,
     r_scoreboard: Res<ScoreBoard>,
-) {
+    q_crosshair: Query<&Crosshair>,
+) 
+{
     let p_score = r_scoreboard.player;
     let o_score = r_scoreboard.opponent;
+    let n_dist = q_crosshair.single().n_dist;
+    let degrees = q_crosshair.single().degrees;
+    let distance = q_crosshair.single().distance;
 
     for mut text in &mut q_debug {
         text.sections[0].value = format!("Player: {p_score:2}");
         text.sections[1].value = format!("\nOpponent: {o_score:2}");
+        text.sections[2].value = format!("\nDistance: {distance:2}\n n_dist: {n_dist:2}\n Degrees: {degrees:2}")
     }
 }
 
