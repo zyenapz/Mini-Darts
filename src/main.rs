@@ -1,7 +1,7 @@
 use core::fmt;
 use std::ops::*;
 
-use bevy::{input::mouse::MouseMotion, prelude::*};
+use bevy::{input::mouse::MouseMotion, prelude::*, window::CursorGrabMode};
 use rand::Rng;
 
 #[derive(Component)]
@@ -82,6 +82,7 @@ fn main() {
         .add_system(move_crosshair)
         .add_system(shoot_dart)
         .add_system(update_texts)
+        .add_system(focus_aim)
         .run();
 }
 
@@ -90,6 +91,12 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut windows: Re
         .get_primary_mut()
         .unwrap()
         .set_cursor_visibility(false);
+
+    windows
+        .get_primary_mut()
+        .unwrap()
+        .set_cursor_grab_mode(CursorGrabMode::Confined);
+
     commands.spawn(Camera2dBundle::default()).insert(MainCamera);
     commands.spawn(SpriteBundle {
         texture: asset_server.load("board.png"),
@@ -129,7 +136,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut windows: Re
     // Create crosshair
     commands
         .spawn(SpriteBundle {
-            texture: asset_server.load("crosshair.png"),
+            texture: asset_server.load("crosshair_foc.png"),
             transform: Transform {
                 translation: Vec3 {
                     x: BOARD_CENTER.x,
@@ -145,7 +152,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut windows: Re
             },
             ..default()
         })
-        .insert(Crosshair {..default()});
+        .insert(Crosshair { ..default() });
 
     // Create sections
     let mut sec: Vec<Section> = Vec::new();
@@ -174,6 +181,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut windows: Re
         player: 301,
         opponent: 301,
     });
+    commands.insert_resource(AimIsFocused(false));
 
     // Create text
     commands.spawn((
@@ -217,12 +225,25 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut windows: Re
     ));
 }
 
+fn focus_aim(
+    mut r_focused: ResMut<AimIsFocused>,
+    r_keyboard: ResMut<Input<KeyCode>>
+) {
+    if r_keyboard.pressed(KeyCode::Space) {
+        r_focused.0 = true;
+    }
+    else if r_keyboard.just_released(KeyCode::Space) {
+        r_focused.0 = false;
+    }
+}
+
 fn move_crosshair(
     r_windows: Res<Windows>,
     q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
     mut q_crosshair: Query<&mut Transform, With<Crosshair>>,
     mut evr_motion: EventReader<MouseMotion>,
     mut r_mouse_onscreen: ResMut<MouseOnScreen>,
+    r_focused: Res<AimIsFocused>,
 ) {
     let (camera, camera_transform) = q_camera.single();
     let window = r_windows.get_primary().unwrap();
@@ -249,19 +270,29 @@ fn move_crosshair(
 
         // Move crosshair
         for evt in evr_motion.iter() {
-            // q_crosshair.single_mut().translation.x += evt.delta.x % 5.;
-            // q_crosshair.single_mut().translation.y += -evt.delta.y % 5.;
-            
+            q_crosshair.single_mut().translation.x += evt.delta.x % 5.;
+            q_crosshair.single_mut().translation.y += -evt.delta.y % 5.;
         }
 
-        q_crosshair.single_mut().translation.x = world_pos.x;
-        q_crosshair.single_mut().translation.y = world_pos.y;
+        // q_crosshair.single_mut().translation.x = world_pos.x;
+        // q_crosshair.single_mut().translation.y = world_pos.y;
 
         // Shake the crosshair
-        // q_crosshair.single_mut().translation.x +=
-        //     rand::thread_rng().gen_range(-CROSSHAIR_RNG_RANGE..CROSSHAIR_RNG_RANGE);
-        // q_crosshair.single_mut().translation.y +=
-        //     rand::thread_rng().gen_range(-CROSSHAIR_RNG_RANGE..CROSSHAIR_RNG_RANGE);
+        match r_focused.0 {
+            true => {
+                q_crosshair.single_mut().translation.x +=
+                    rand::thread_rng().gen_range(-0.2..0.2);
+                q_crosshair.single_mut().translation.y +=
+                    rand::thread_rng().gen_range(-0.2..0.2);
+            }
+            false => {
+                q_crosshair.single_mut().translation.x +=
+                    rand::thread_rng().gen_range(-CROSSHAIR_RNG_RANGE..CROSSHAIR_RNG_RANGE);
+                q_crosshair.single_mut().translation.y +=
+                    rand::thread_rng().gen_range(-CROSSHAIR_RNG_RANGE..CROSSHAIR_RNG_RANGE);
+            },
+        }
+
     } else {
         r_mouse_onscreen.0 = false;
     }
@@ -333,8 +364,7 @@ fn update_texts(
     mut q_debug: Query<&mut Text, With<DebugText>>,
     r_scoreboard: Res<ScoreBoard>,
     q_crosshair: Query<&Crosshair>,
-) 
-{
+) {
     let p_score = r_scoreboard.player;
     let o_score = r_scoreboard.opponent;
     let n_dist = q_crosshair.single().n_dist;
@@ -344,7 +374,8 @@ fn update_texts(
     for mut text in &mut q_debug {
         text.sections[0].value = format!("Player: {p_score:2}");
         text.sections[1].value = format!("\nOpponent: {o_score:2}");
-        text.sections[2].value = format!("\nDistance: {distance:2}\n n_dist: {n_dist:2}\n Degrees: {degrees:2}")
+        text.sections[2].value =
+            format!("\nDistance: {distance:2}\n n_dist: {n_dist:2}\n Degrees: {degrees:2}")
     }
 }
 
