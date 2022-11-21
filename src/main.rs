@@ -27,6 +27,12 @@ struct MouseOnScreen(bool);
 struct AimIsFocused(bool);
 
 #[derive(Resource)]
+struct CrosshairImages {
+    unfocused: Handle<Image>,
+    focused: Handle<Image>
+}
+
+#[derive(Resource)]
 struct MousePosition(Vec2);
 
 #[derive(Resource)]
@@ -87,6 +93,7 @@ fn main() {
 }
 
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut windows: ResMut<Windows>) {
+
     windows
         .get_primary_mut()
         .unwrap()
@@ -134,9 +141,13 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut windows: Re
     });
 
     // Create crosshair
+    let img_unfocused: Handle<Image> = asset_server.load("crosshair.png");
+    let img_focused: Handle<Image> = asset_server.load("crosshair_foc.png");
+    commands.insert_resource(CrosshairImages { unfocused: img_unfocused.clone(), focused: img_focused });
+
     commands
         .spawn(SpriteBundle {
-            texture: asset_server.load("crosshair_foc.png"),
+            texture: img_unfocused,
             transform: Transform {
                 translation: Vec3 {
                     x: BOARD_CENTER.x,
@@ -227,14 +238,21 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut windows: Re
 
 fn focus_aim(
     mut r_focused: ResMut<AimIsFocused>,
-    r_keyboard: ResMut<Input<KeyCode>>
+    r_keyboard: ResMut<Input<KeyCode>>,
+    mut q_crosshair: Query<&mut Handle<Image>, With<Crosshair>>,
+    r_images: Res<CrosshairImages>
 ) {
+    let mut img_handle = q_crosshair.single_mut();
+
     if r_keyboard.pressed(KeyCode::Space) {
         r_focused.0 = true;
+        *img_handle = r_images.focused.clone();
     }
     else if r_keyboard.just_released(KeyCode::Space) {
         r_focused.0 = false;
+        *img_handle = r_images.unfocused.clone();
     }
+
 }
 
 fn move_crosshair(
@@ -251,21 +269,15 @@ fn move_crosshair(
 
     // Check if the cursor is inside the window and get its position
     if let Some(screen_pos) = window.cursor_position() {
-        // Get the size of the window
+        // Get mouse position
         let window_size = Vec2::new(window.width() as f32, window.height() as f32);
-
-        // Convert screen position [0..resolution] to ndc [-1..1] (gpu coordinates)
         let ndc = (screen_pos / window_size) * 2.0 - Vec2::ONE;
-
-        // Matrix for undoing the projection and camera transform
         let matrix = camera_transform.compute_matrix() * camera.projection_matrix().inverse();
-
-        // Use it to convert ndc to world-space coordinates
-        let world_pos = matrix.project_point3(ndc.extend(-1.0)).truncate();
+        let mouse_pos = matrix.project_point3(ndc.extend(-1.0)).truncate();
 
         // Check if mouse is back on screen
         if r_mouse_onscreen.0 == false {
-            crosshair.translation = world_pos.extend(1.);
+            crosshair.translation = mouse_pos.extend(1.);
             r_mouse_onscreen.0 = true
         }
 
