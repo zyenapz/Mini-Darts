@@ -2,6 +2,7 @@ use core::fmt;
 use std::ops::*;
 
 use bevy::{input::mouse::MouseMotion, prelude::*, window::CursorGrabMode};
+use iyes_loopless::prelude::{AppLooplessStateExt, ConditionSet};
 use rand::Rng;
 
 #[derive(Component)]
@@ -17,6 +18,9 @@ struct Crosshair {
 #[derive(Component)]
 struct DebugText;
 
+#[derive(Component)] // Marker for player's dart image
+struct PlayerDart;
+
 #[derive(Resource)]
 struct Sections(Vec<Section>);
 
@@ -29,18 +33,36 @@ struct AimIsFocused(bool);
 #[derive(Resource)]
 struct CrosshairImages {
     unfocused: Handle<Image>,
-    focused: Handle<Image>
+    focused: Handle<Image>,
+}
+
+#[derive(Resource)]
+struct DartsImages {
+    player: Handle<Image>,
+    opponent: Handle<Image>,
 }
 
 #[derive(Resource)]
 struct MousePosition(Vec2);
 
 #[derive(Resource)]
+struct DartsLeft(i8);
+
+impl DartsLeft {
+    fn reset(&mut self) {
+        self.0 = 3_i8;
+    }
+
+    fn decrease(&mut self) {
+        self.0 -= 1_i8;
+    }
+}
+
+#[derive(Resource)]
 struct ScoreBoard {
     player: i32,
     opponent: i32,
 }
-
 struct Section {
     start: f32,
     end: f32,
@@ -53,9 +75,23 @@ impl fmt::Display for Section {
     }
 }
 
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+enum AppState {
+    MainMenu,
+    InGame,
+    Paused,
+    GameOver,
+}
+
+#[derive(Resource, Debug, Clone, Eq, PartialEq, Hash)]
+enum CurrentTurn {
+    Player,
+    Opponent,
+}
+
 const BOARD_CENTER: Vec2 = Vec2::new(-25., 0.);
 const BOARD_RADIUS: f32 = 300_f32;
-const SECTION_ARC: f32 = 18_f32; // 20 sections divided by 360 = 18
+// const SECTION_ARC: f32 = 18_f32; // 20 sections divided by 360 = 18
 
 // Board's rings' bounds (normalized, with respect to board's center)
 const R_BULEYE: f32 = 0.01; // Bullseye
@@ -84,16 +120,51 @@ fn main() {
                 })
                 .set(ImagePlugin::default_nearest()), // For pixel-art style
         )
+        .add_loopless_state(AppState::InGame)
         .add_startup_system(setup)
-        .add_system(move_crosshair)
-        .add_system(shoot_dart)
+        .add_system_set(
+            ConditionSet::new()
+                .run_in_state(AppState::InGame)
+                .run_if(is_player_turn)
+                .label("p_turn")
+                .with_system(move_crosshair)
+                .with_system(shake_crosshair)
+                .with_system(bound_crosshair)
+                .with_system(shoot_dart)
+                .with_system(focus_aim)
+                .into(),
+        )
+        .add_system_set(
+            ConditionSet::new()
+                .run_in_state(AppState::InGame)
+                .run_if_not(is_player_turn)
+                .label("ai_turn")
+                .with_system(say_hello)
+                .into(),
+        )
         .add_system(update_texts)
-        .add_system(focus_aim)
+        .add_system(check_turn)
         .run();
 }
 
-fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut windows: ResMut<Windows>) {
+fn is_player_turn(r_turn: Res<CurrentTurn>) -> bool {
+    r_turn.eq(&CurrentTurn::Player)
+}
 
+fn say_hello() {
+    println!("Hello world!");
+}
+
+fn check_turn(mut r_turn: ResMut<CurrentTurn>, mut r_darts: ResMut<DartsLeft>) {
+    if r_turn.ne(&CurrentTurn::Opponent) {
+        if r_darts.0 <= 0 {
+            *r_turn = CurrentTurn::Opponent;
+            r_darts.reset();
+        }
+    }
+}
+
+fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut windows: ResMut<Windows>) {
     windows
         .get_primary_mut()
         .unwrap()
@@ -143,7 +214,10 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut windows: Re
     // Create crosshair
     let img_unfocused: Handle<Image> = asset_server.load("crosshair.png");
     let img_focused: Handle<Image> = asset_server.load("crosshair_foc.png");
-    commands.insert_resource(CrosshairImages { unfocused: img_unfocused.clone(), focused: img_focused });
+    commands.insert_resource(CrosshairImages {
+        unfocused: img_unfocused.clone(),
+        focused: img_focused,
+    });
 
     commands
         .spawn(SpriteBundle {
@@ -152,18 +226,21 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut windows: Re
                 translation: Vec3 {
                     x: BOARD_CENTER.x,
                     y: BOARD_CENTER.y,
-                    z: 2.,
-                },
-                scale: Vec3 {
-                    x: 1.,
-                    y: 1.,
-                    z: 0.,
+                    z: 5.,
                 },
                 ..default()
             },
             ..default()
         })
         .insert(Crosshair { ..default() });
+
+    // Load darts images
+    let img_darts_p: Handle<Image> = asset_server.load("darts_p.png");
+    let img_darts_o: Handle<Image> = asset_server.load("darts_o.png");
+    commands.insert_resource(DartsImages {
+        player: img_darts_p,
+        opponent: img_darts_o,
+    });
 
     // Create sections
     let mut sec: Vec<Section> = Vec::new();
@@ -182,6 +259,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut windows: Re
         sec.push(s);
     }
 
+    // Misc. Resources
     commands.insert_resource(Sections(sec));
     commands.insert_resource(MouseOnScreen(true));
     commands.insert_resource(MousePosition(Vec2 {
@@ -193,6 +271,8 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut windows: Re
         opponent: 301,
     });
     commands.insert_resource(AimIsFocused(false));
+    commands.insert_resource(DartsLeft(3));
+    commands.insert_resource(CurrentTurn::Player);
 
     // Create text
     commands.spawn((
@@ -240,19 +320,17 @@ fn focus_aim(
     mut r_focused: ResMut<AimIsFocused>,
     r_keyboard: ResMut<Input<KeyCode>>,
     mut q_crosshair: Query<&mut Handle<Image>, With<Crosshair>>,
-    r_images: Res<CrosshairImages>
+    r_images: Res<CrosshairImages>,
 ) {
     let mut img_handle = q_crosshair.single_mut();
 
     if r_keyboard.pressed(KeyCode::Space) {
         r_focused.0 = true;
         *img_handle = r_images.focused.clone();
-    }
-    else if r_keyboard.just_released(KeyCode::Space) {
+    } else if r_keyboard.just_released(KeyCode::Space) {
         r_focused.0 = false;
         *img_handle = r_images.unfocused.clone();
     }
-
 }
 
 fn move_crosshair(
@@ -261,7 +339,6 @@ fn move_crosshair(
     mut q_crosshair: Query<&mut Transform, With<Crosshair>>,
     mut evr_motion: EventReader<MouseMotion>,
     mut r_mouse_onscreen: ResMut<MouseOnScreen>,
-    r_focused: Res<AimIsFocused>,
 ) {
     let (camera, camera_transform) = q_camera.single();
     let window = r_windows.get_primary().unwrap();
@@ -286,54 +363,70 @@ fn move_crosshair(
             crosshair.translation.x += evt.delta.x % 5.;
             crosshair.translation.y += -evt.delta.y % 5.;
         }
-        
-        // Bound crosshair within the window's bounds 
-
-        let win_hw = window_size.x / 2.;
-        let win_hh = window_size.y / 2.;
-
-        if crosshair.translation.x > win_hw {
-            crosshair.translation.x = win_hw
-        }
-        if crosshair.translation.x < -win_hw {
-            crosshair.translation.x = -win_hw
-        }
-        if crosshair.translation.y > win_hh {
-            crosshair.translation.y = win_hh
-        }
-        if crosshair.translation.y < -win_hh {
-            crosshair.translation.y = -win_hh
-        }
 
         // crosshair.translation.x = world_pos.x;
         // crosshair.translation.y = world_pos.y;
-
-        // Shake the crosshair
-        match r_focused.0 {
-            true => {
-                crosshair.translation.x +=
-                    rand::thread_rng().gen_range(-0.2..0.2);
-                    crosshair.translation.y +=
-                    rand::thread_rng().gen_range(-0.2..0.2);
-            }
-            false => {
-                crosshair.translation.x +=
-                    rand::thread_rng().gen_range(-CROSSHAIR_RNG_RANGE..CROSSHAIR_RNG_RANGE);
-                    crosshair.translation.y +=
-                    rand::thread_rng().gen_range(-CROSSHAIR_RNG_RANGE..CROSSHAIR_RNG_RANGE);
-            },
-        }
-
     } else {
         r_mouse_onscreen.0 = false;
     }
 }
 
+fn bound_crosshair(
+    r_windows: Res<Windows>,
+    mut q_crosshair: Query<&mut Transform, With<Crosshair>>,
+) {
+    let window = r_windows.get_primary().unwrap();
+    let mut crosshair = q_crosshair.single_mut();
+
+    let window_size = Vec2 {
+        x: window.width(),
+        y: window.height(),
+    };
+    let w_halfwidth = window_size.x / 2.;
+    let w_halfheight = window_size.y / 2.;
+
+    if crosshair.translation.x > w_halfwidth {
+        crosshair.translation.x = w_halfwidth
+    }
+    if crosshair.translation.x < -w_halfwidth {
+        crosshair.translation.x = -w_halfwidth
+    }
+    if crosshair.translation.y > w_halfheight {
+        crosshair.translation.y = w_halfheight
+    }
+    if crosshair.translation.y < -w_halfheight {
+        crosshair.translation.y = -w_halfheight
+    }
+}
+
+fn shake_crosshair(
+    mut q_crosshair: Query<&mut Transform, With<Crosshair>>,
+    r_focused: Res<AimIsFocused>,
+) {
+    let mut crosshair = q_crosshair.single_mut();
+
+    match r_focused.0 {
+        true => {
+            crosshair.translation.x += rand::thread_rng().gen_range(-0.2..0.2);
+            crosshair.translation.y += rand::thread_rng().gen_range(-0.2..0.2);
+        }
+        false => {
+            crosshair.translation.x +=
+                rand::thread_rng().gen_range(-CROSSHAIR_RNG_RANGE..CROSSHAIR_RNG_RANGE);
+            crosshair.translation.y +=
+                rand::thread_rng().gen_range(-CROSSHAIR_RNG_RANGE..CROSSHAIR_RNG_RANGE);
+        }
+    }
+}
+
 fn shoot_dart(
+    mut commands: Commands,
     r_mbuttons: Res<Input<MouseButton>>,
     r_sections: Res<Sections>,
+    r_dart_img: Res<DartsImages>,
     mut r_scoreboard: ResMut<ScoreBoard>,
     mut q_crosshair: Query<(&mut Transform, &mut Crosshair)>,
+    mut r_darts_left: ResMut<DartsLeft>,
 ) {
     let mut crosshair = q_crosshair.single_mut();
 
@@ -351,6 +444,9 @@ fn shoot_dart(
     crosshair.1.distance = distance;
 
     if r_mbuttons.just_pressed(MouseButton::Left) {
+        // Decrease dart count
+        r_darts_left.decrease();
+
         // Calculate score
         if n_dist <= R_BULEYE {
             r_scoreboard.player -= 50;
@@ -384,6 +480,22 @@ fn shoot_dart(
         } else {
             eprintln!("Missed!");
         }
+
+        // Spawn darts sprite
+        commands
+            .spawn(SpriteBundle {
+                texture: r_dart_img.player.clone(),
+                transform: Transform {
+                    translation: Vec3 {
+                        x: crosshair.0.translation.x,
+                        y: crosshair.0.translation.y,
+                        z: 2.,
+                    },
+                    ..default()
+                },
+                ..default()
+            })
+            .insert(PlayerDart);
     }
 }
 
@@ -391,18 +503,20 @@ fn update_texts(
     mut q_debug: Query<&mut Text, With<DebugText>>,
     r_scoreboard: Res<ScoreBoard>,
     q_crosshair: Query<&Crosshair>,
+    r_pdarts: Res<DartsLeft>,
 ) {
     let p_score = r_scoreboard.player;
     let o_score = r_scoreboard.opponent;
     let n_dist = q_crosshair.single().n_dist;
-    let degrees = q_crosshair.single().degrees;
-    let distance = q_crosshair.single().distance;
+    let degrees = round_to_two(q_crosshair.single().degrees);
+    let distance = round_to_two(q_crosshair.single().distance);
+    let p_darts = r_pdarts.0;
 
     for mut text in &mut q_debug {
-        text.sections[0].value = format!("Player: {p_score:2}");
-        text.sections[1].value = format!("\nOpponent: {o_score:2}");
+        text.sections[0].value = format!("Player: {p_score:10}");
+        text.sections[1].value = format!("\nOpponent: {o_score:10}");
         text.sections[2].value =
-            format!("\nDistance: {distance:2}\n n_dist: {n_dist:2}\n Degrees: {degrees:2}")
+            format!("\nDistance: {distance:10}\nn_dist:{n_dist:10}\nDegrees: {degrees:10}\nPlayer darts: {p_darts:10}");
     }
 }
 
