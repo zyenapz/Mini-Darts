@@ -247,6 +247,7 @@ fn move_crosshair(
 ) {
     let (camera, camera_transform) = q_camera.single();
     let window = r_windows.get_primary().unwrap();
+    let mut crosshair = q_crosshair.single_mut();
 
     // Check if the cursor is inside the window and get its position
     if let Some(screen_pos) = window.cursor_position() {
@@ -264,31 +265,49 @@ fn move_crosshair(
 
         // Check if mouse is back on screen
         if r_mouse_onscreen.0 == false {
-            q_crosshair.single_mut().translation = world_pos.extend(1.);
+            crosshair.translation = world_pos.extend(1.);
             r_mouse_onscreen.0 = true
         }
 
         // Move crosshair
         for evt in evr_motion.iter() {
-            q_crosshair.single_mut().translation.x += evt.delta.x % 5.;
-            q_crosshair.single_mut().translation.y += -evt.delta.y % 5.;
+            crosshair.translation.x += evt.delta.x % 5.;
+            crosshair.translation.y += -evt.delta.y % 5.;
+        }
+        
+        // Bound crosshair within the window's bounds 
+
+        let win_hw = window_size.x / 2.;
+        let win_hh = window_size.y / 2.;
+
+        if crosshair.translation.x > win_hw {
+            crosshair.translation.x = win_hw
+        }
+        if crosshair.translation.x < -win_hw {
+            crosshair.translation.x = -win_hw
+        }
+        if crosshair.translation.y > win_hh {
+            crosshair.translation.y = win_hh
+        }
+        if crosshair.translation.y < -win_hh {
+            crosshair.translation.y = -win_hh
         }
 
-        // q_crosshair.single_mut().translation.x = world_pos.x;
-        // q_crosshair.single_mut().translation.y = world_pos.y;
+        // crosshair.translation.x = world_pos.x;
+        // crosshair.translation.y = world_pos.y;
 
         // Shake the crosshair
         match r_focused.0 {
             true => {
-                q_crosshair.single_mut().translation.x +=
+                crosshair.translation.x +=
                     rand::thread_rng().gen_range(-0.2..0.2);
-                q_crosshair.single_mut().translation.y +=
+                    crosshair.translation.y +=
                     rand::thread_rng().gen_range(-0.2..0.2);
             }
             false => {
-                q_crosshair.single_mut().translation.x +=
+                crosshair.translation.x +=
                     rand::thread_rng().gen_range(-CROSSHAIR_RNG_RANGE..CROSSHAIR_RNG_RANGE);
-                q_crosshair.single_mut().translation.y +=
+                    crosshair.translation.y +=
                     rand::thread_rng().gen_range(-CROSSHAIR_RNG_RANGE..CROSSHAIR_RNG_RANGE);
             },
         }
@@ -314,10 +333,6 @@ fn shoot_dart(
     let distance = BOARD_CENTER.distance(crosshair.0.translation.truncate());
 
     let n_dist = round_to_two(normalize(distance, 0., BOARD_RADIUS));
-    eprintln!(
-        "Angle: {}, Distance: {}, Normalized distance: {}",
-        degrees, distance, n_dist
-    );
 
     crosshair.1.degrees = degrees;
     crosshair.1.n_dist = n_dist;
