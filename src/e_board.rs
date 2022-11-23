@@ -51,7 +51,7 @@ pub fn setup_board_sprites(mut commands: Commands, asset_server: ResMut<AssetSer
 
 pub fn setup_board_sections(mut commands: Commands) {
     let mut sections: Vec<Section> = Vec::new();
-    let SCORES: Vec<i32> = vec![
+    let scores: Vec<i32> = vec![
         20, 5, 12, 9, 14, 11, 8, 16, 7, 19, 3, 17, 2, 15, 10, 6, 13, 4, 18, 1,
     ];
 
@@ -62,7 +62,7 @@ pub fn setup_board_sections(mut commands: Commands) {
         sections.push(Section {
             start: start_angle,
             end: end_angle,
-            score: SCORES[num % SCORES.len()],
+            score: scores[num % scores.len()],
         });
     }
 

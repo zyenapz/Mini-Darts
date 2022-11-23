@@ -5,7 +5,7 @@ use bevy::prelude::*;
 use crate::{
     e_board::{Sections, BOARD_CENTER, BOARD_RADIUS},
     e_crosshair::Crosshair,
-    z_utils::{normalize, round_to_two},
+    z_utils::{normalize, round_to_two}, e_darts::DartImage,
 };
 use rand::Rng;
 
@@ -22,9 +22,6 @@ pub struct MousePosition(Vec2);
 
 #[derive(Resource)]
 pub struct MouseOnScreen(pub bool);
-
-#[derive(Resource)]
-pub struct AimIsFocused(pub bool);
 
 #[derive(Resource)]
 pub struct ScoreBoard {
@@ -51,6 +48,10 @@ pub enum CurrentTurn {
     Opponent,
 }
 
+// Events
+pub struct AimFocusedEvent(pub bool);
+pub struct DartShotEvent(pub bool);
+
 pub fn setup_logic(mut commands: Commands) {
     commands.insert_resource(MouseOnScreen(true));
     commands.insert_resource(MousePosition(Vec2 {
@@ -61,7 +62,6 @@ pub fn setup_logic(mut commands: Commands) {
         player: 301,
         opponent: 301,
     });
-    commands.insert_resource(AimIsFocused(false));
     commands.insert_resource(DartsLeft(3));
     commands.insert_resource(CurrentTurn::Player);
 }
@@ -96,51 +96,71 @@ pub fn bound_crosshair(
 
 pub fn shake_crosshair(
     mut q_crosshair: Query<&mut Transform, With<Crosshair>>,
-    r_focused: Res<AimIsFocused>,
+    mut ev_aimfocused: EventReader<AimFocusedEvent>,
 ) {
     const SHAKE_FOC: f32 = 0.2;
     const SHAKE_UFOC: f32 = 1.5;
 
     let mut crosshair = q_crosshair.single_mut();
 
-    match r_focused.0 {
-        true => {
-            crosshair.translation.x += rand::thread_rng().gen_range(-SHAKE_FOC..SHAKE_FOC);
-            crosshair.translation.y += rand::thread_rng().gen_range(-SHAKE_FOC..SHAKE_FOC);
-        }
-        false => {
-            crosshair.translation.x += rand::thread_rng().gen_range(-SHAKE_UFOC..SHAKE_UFOC);
-            crosshair.translation.y += rand::thread_rng().gen_range(-SHAKE_UFOC..SHAKE_UFOC);
+    for ev in ev_aimfocused.iter() {
+        match ev.0 {
+            true => {
+                crosshair.translation.x += rand::thread_rng().gen_range(-SHAKE_FOC..SHAKE_FOC);
+                crosshair.translation.y += rand::thread_rng().gen_range(-SHAKE_FOC..SHAKE_FOC);
+            }
+            false => {
+                crosshair.translation.x += rand::thread_rng().gen_range(-SHAKE_UFOC..SHAKE_UFOC);
+                crosshair.translation.y += rand::thread_rng().gen_range(-SHAKE_UFOC..SHAKE_UFOC);
+            }
         }
     }
 }
 
-pub fn update_scoreboard(n_dist: f32, degrees: f32, r_scoreboard: &mut ScoreBoard, r_sections: &Sections) {
-    if n_dist <= R_BULEYE {
-        r_scoreboard.player -= 50;
-    } else if n_dist <= R_HALBEY {
-        r_scoreboard.player -= 25;
-    } else if n_dist <= R_DOBFAR {
-        for section in &r_sections.0 {
-            let mut multiplier = 1;
+pub fn update_scoreboard(
+    r_sections: Res<Sections>,
+    mut r_scoreboard: ResMut<ScoreBoard>,
+    mut q_crosshair: Query<(&mut Transform, &mut Crosshair)>,
+    mut ev_dartshot: EventReader<DartShotEvent>,
+) {
+    for ev in ev_dartshot.iter() {
+        let dart_was_shot = ev.0 == true;
 
-            let landed_treble = (R_TRINEA..=R_TRIFAR).contains(&n_dist);
-            let landed_double = (R_DOBNEA..=R_DOBFAR).contains(&n_dist);
-            let landed_single = (section.start..section.end).contains(&degrees);
+        if dart_was_shot {
+            let crosshair = q_crosshair.single_mut();
 
-            if landed_treble {
-                multiplier = 3;
-            } else if landed_double {
-                multiplier = 2;
-            }
+            // Calculate angle between board's center and mouse pos, then offset it so that angle 0 starts on score the right wire of score '20'
+            let board_crosshair = BOARD_CENTER.sub(crosshair.0.translation.truncate()); // Boardcenter to mouse vector
+            let offset = 459_f32; // Just tweaked the number until I got this
+            let degrees =
+                (board_crosshair.y.atan2(board_crosshair.x).to_degrees() + offset) % 360_f32;
 
-            if landed_single {
-                r_scoreboard.player -= section.score * multiplier;
-                eprintln!(
-                    "Hit {} worth {} pts! ",
-                    section.score,
-                    section.score * multiplier
-                );
+            let distance = BOARD_CENTER.distance(crosshair.0.translation.truncate());
+
+            let n_dist = round_to_two(normalize(distance, 0., BOARD_RADIUS));
+
+            if n_dist <= R_BULEYE {
+                r_scoreboard.player -= 50;
+            } else if n_dist <= R_HALBEY {
+                r_scoreboard.player -= 25;
+            } else if n_dist <= R_DOBFAR {
+                for section in &r_sections.0 {
+                    let mut multiplier = 1;
+
+                    let landed_treble = (R_TRINEA..=R_TRIFAR).contains(&n_dist);
+                    let landed_double = (R_DOBNEA..=R_DOBFAR).contains(&n_dist);
+                    let landed_single = (section.start..section.end).contains(&degrees);
+
+                    if landed_treble {
+                        multiplier = 3;
+                    } else if landed_double {
+                        multiplier = 2;
+                    }
+
+                    if landed_single {
+                        r_scoreboard.player -= section.score * multiplier;
+                    }
+                }
             }
         }
     }
