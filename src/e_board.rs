@@ -2,6 +2,8 @@ use std::fmt;
 
 use bevy::prelude::*;
 
+use crate::g_zval::{Z_BOARD, Z_FRAME};
+
 pub const BOARD_CENTER: Vec2 = Vec2::new(-25., 0.);
 pub const BOARD_RADIUS: f32 = 300_f32;
 const SECTION_ARC: f32 = 18_f32; // 20 sections divided by 360 = 18
@@ -28,7 +30,7 @@ pub fn setup_board_sprites(mut commands: Commands, asset_server: ResMut<AssetSer
             translation: Vec3 {
                 x: BOARD_CENTER.x,
                 y: BOARD_CENTER.y,
-                z: 1.,
+                z: Z_BOARD,
             },
             ..default()
         },
@@ -41,7 +43,7 @@ pub fn setup_board_sprites(mut commands: Commands, asset_server: ResMut<AssetSer
             translation: Vec3 {
                 x: BOARD_CENTER.x,
                 y: BOARD_CENTER.y,
-                z: 0.,
+                z: Z_FRAME,
             },
             ..default()
         },

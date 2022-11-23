@@ -4,7 +4,9 @@ mod e_darts;
 mod e_debug;
 mod e_window;
 mod g_controls;
+mod g_events;
 mod g_logic;
+mod g_zval;
 mod z_utils;
 
 use bevy::prelude::*;
@@ -14,7 +16,10 @@ use e_darts::{setup_darts, spawn_darts};
 use e_debug::{setup_debug_info, update_debug_info};
 use e_window::setup_window;
 use g_controls::{focus_aim, move_mouse, shoot_dart};
-use g_logic::{bound_crosshair, check_turn, is_player_turn, setup_logic, shake_crosshair, AimFocusedEvent, DartShotEvent, update_scoreboard};
+use g_events::{AimFocusedEvent, DartShotEvent};
+use g_logic::{
+    bound_crosshair, check_turn, is_player_turn, setup_logic, shake_crosshair, update_scoreboard,
+};
 use iyes_loopless::prelude::{AppLooplessStateExt, ConditionSet};
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
@@ -67,9 +72,9 @@ fn main() {
                 .with_system(shake_crosshair)
                 .with_system(bound_crosshair)
                 .with_system(update_debug_info)
-                .with_system(check_turn)
                 .with_system(update_scoreboard)
                 .with_system(spawn_darts)
+                .with_system(check_turn)
                 .into(),
         )
         .add_system_set(

@@ -1,5 +1,7 @@
 use bevy::{prelude::*, window::CursorGrabMode};
 
+use crate::g_zval::Z_CAMERA;
+
 #[derive(Component)]
 pub struct MainCamera;
 
@@ -15,7 +17,7 @@ pub fn setup_window(mut commands: Commands, mut windows: ResMut<Windows>) {
         .spawn(Camera2dBundle {
             transform: Transform {
                 translation: Vec3 {
-                    z: 999.,
+                    z: Z_CAMERA,
                     ..default()
                 },
                 ..default()

@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::{e_crosshair::Crosshair, g_logic::DartShotEvent};
+use crate::{e_crosshair::Crosshair, g_events::DartShotEvent, g_zval::Z_DART};
 
 #[derive(Resource)]
 pub struct DartImage {
@@ -8,7 +8,7 @@ pub struct DartImage {
     opponent: Handle<Image>,
 }
 
-#[derive(Component)] // Marker for player's dart image
+#[derive(Component)]
 pub struct PlayerDart;
 
 pub fn setup_darts(mut commands: Commands, asset_server: Res<AssetServer>) {
@@ -40,7 +40,7 @@ pub fn spawn_darts(
                         translation: Vec3 {
                             x: crosshair.translation.x,
                             y: crosshair.translation.y,
-                            z: 2.,
+                            z: Z_DART,
                         },
                         ..default()
                     },

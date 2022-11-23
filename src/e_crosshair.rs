@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::e_board::BOARD_CENTER;
+use crate::{e_board::BOARD_CENTER, g_zval::Z_CROSSHAIR};
 
 #[derive(Component, Default)]
 pub struct Crosshair {
@@ -34,7 +34,7 @@ pub fn setup_crosshair(mut commands: Commands, asset_server: Res<AssetServer>) {
                 translation: Vec3 {
                     x: BOARD_CENTER.x,
                     y: BOARD_CENTER.y,
-                    z: 10.,
+                    z: Z_CROSSHAIR,
                 },
                 ..default()
             },

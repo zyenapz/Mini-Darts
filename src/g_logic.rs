@@ -5,7 +5,7 @@ use bevy::prelude::*;
 use crate::{
     e_board::{Sections, BOARD_CENTER, BOARD_RADIUS},
     e_crosshair::Crosshair,
-    z_utils::{normalize, round_to_two}, e_darts::DartImage,
+    z_utils::{normalize, round_to_two}, g_events::{AimFocusedEvent, DartShotEvent},
 };
 use rand::Rng;
 
@@ -21,7 +21,7 @@ pub const R_DOBFAR: f32 = 0.18; // Double-far
 pub struct MousePosition(Vec2);
 
 #[derive(Resource)]
-pub struct MouseOnScreen(pub bool);
+pub struct MouseOnScreen(pub bool); // TODO: Convert this into an event
 
 #[derive(Resource)]
 pub struct ScoreBoard {
@@ -47,10 +47,6 @@ pub enum CurrentTurn {
     Player,
     Opponent,
 }
-
-// Events
-pub struct AimFocusedEvent(pub bool);
-pub struct DartShotEvent(pub bool);
 
 pub fn setup_logic(mut commands: Commands) {
     commands.insert_resource(MouseOnScreen(true));
@@ -130,10 +126,10 @@ pub fn update_scoreboard(
             let crosshair = q_crosshair.single_mut();
 
             // Calculate angle between board's center and mouse pos, then offset it so that angle 0 starts on score the right wire of score '20'
-            let board_crosshair = BOARD_CENTER.sub(crosshair.0.translation.truncate()); // Boardcenter to mouse vector
+            let bc_vect = BOARD_CENTER.sub(crosshair.0.translation.truncate()); // Boardcenter to mouse vector
             let offset = 459_f32; // Just tweaked the number until I got this
             let degrees =
-                (board_crosshair.y.atan2(board_crosshair.x).to_degrees() + offset) % 360_f32;
+                (bc_vect.y.atan2(bc_vect.x).to_degrees() + offset) % 360_f32;
 
             let distance = BOARD_CENTER.distance(crosshair.0.translation.truncate());
 

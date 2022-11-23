@@ -3,7 +3,8 @@ use bevy::{input::mouse::MouseMotion, prelude::*};
 use crate::{
     e_crosshair::{Crosshair, CrosshairImage},
     e_window::MainCamera,
-    g_logic::{AimFocusedEvent, DartShotEvent, DartsLeft, MouseOnScreen},
+    g_events::{AimFocusedEvent, DartShotEvent},
+    g_logic::{DartsLeft, MouseOnScreen},
 };
 
 pub fn focus_aim(
