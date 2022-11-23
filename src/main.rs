@@ -55,9 +55,9 @@ fn main() {
             SystemSet::new()
                 .with_system(setup_window)
                 .with_system(setup_logic)
+                .with_system(setup_crosshair)
                 .with_system(setup_board_sprites)
                 .with_system(setup_board_sections)
-                .with_system(setup_crosshair)
                 .with_system(setup_debug_info)
                 .with_system(setup_darts),
         )

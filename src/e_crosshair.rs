@@ -29,7 +29,7 @@ pub fn setup_crosshair(mut commands: Commands, asset_server: Res<AssetServer>) {
     // Spawn crosshair sprite
     commands
         .spawn(SpriteBundle {
-            texture: img_unfocused,
+            texture: img_unfocused.clone(),
             transform: Transform {
                 translation: Vec3 {
                     x: BOARD_CENTER.x,

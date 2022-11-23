@@ -4,7 +4,7 @@ use crate::{
     e_crosshair::{Crosshair, CrosshairImage},
     e_window::MainCamera,
     g_events::{AimFocusedEvent, DartShotEvent},
-    g_logic::{DartsLeft, MouseOnScreen},
+    g_logic::{DartsLeft, MouseOnScreen}, g_zval::Z_CROSSHAIR,
 };
 
 pub fn focus_aim(
@@ -14,7 +14,7 @@ pub fn focus_aim(
     mut ev_aimfocused: EventWriter<AimFocusedEvent>,
 ) {
     let mut img_handle = q_crosshair.single_mut();
-
+    
     if r_keyboard.pressed(KeyCode::Space) {
         ev_aimfocused.send(AimFocusedEvent(true));
         *img_handle = r_images.focused.clone();
@@ -25,11 +25,12 @@ pub fn focus_aim(
 }
 
 pub fn move_mouse(
-    r_windows: Res<Windows>,
     q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
     mut q_crosshair: Query<&mut Transform, With<Crosshair>>,
-    mut evr_motion: EventReader<MouseMotion>,
     mut r_mouse_onscreen: ResMut<MouseOnScreen>,
+    r_time: Res<Time>,
+    r_windows: Res<Windows>,
+    mut evr_motion: EventReader<MouseMotion>,
 ) {
     let (camera, camera_transform) = q_camera.single();
     let window = r_windows.get_primary().unwrap();
@@ -45,14 +46,14 @@ pub fn move_mouse(
 
         // Check if mouse is back on screen
         if r_mouse_onscreen.0 == false {
-            crosshair.translation = mouse_pos.extend(1.);
+            crosshair.translation = mouse_pos.extend(Z_CROSSHAIR);
             r_mouse_onscreen.0 = true
         }
 
         // Move crosshair
         for evt in evr_motion.iter() {
-            crosshair.translation.x += evt.delta.x % 5.;
-            crosshair.translation.y += -evt.delta.y % 5.;
+            crosshair.translation.x += evt.delta.x * r_time.delta_seconds() * 10.;
+            crosshair.translation.y += -evt.delta.y * r_time.delta_seconds() * 10.;
         }
 
         // crosshair.translation.x = world_pos.x;
