@@ -1,4 +1,4 @@
-use std::ops::Sub;
+use std::{ops::Sub, time::Duration};
 
 use bevy::prelude::*;
 
@@ -40,6 +40,11 @@ pub enum CurrentTurn {
     Opponent,
 }
 
+#[derive(Resource)]
+pub struct AimFocusTimer {
+    pub timer: Timer,
+}
+
 pub fn setup_logic(mut commands: Commands) {
     commands.insert_resource(MouseOnScreen(true));
     commands.insert_resource(MousePosition(Vec2 {
@@ -52,6 +57,9 @@ pub fn setup_logic(mut commands: Commands) {
     });
     commands.insert_resource(DartsLeft(3));
     commands.insert_resource(CurrentTurn::Player);
+
+    // Timers
+    commands.insert_resource(AimFocusTimer { timer: Timer::new(Duration::from_secs(1), TimerMode::Once) });
 }
 
 pub fn bound_crosshair(

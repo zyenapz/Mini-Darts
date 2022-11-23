@@ -1,23 +1,34 @@
+use std::ops::Not;
+
 use bevy::{input::mouse::MouseMotion, prelude::*};
 
 use crate::{
     e_crosshair::{Crosshair, CrosshairImage},
     e_window::MainCamera,
     g_events::{AimFocusedEvent, DartShotEvent},
-    g_logic::{DartsLeft, MouseOnScreen}, g_zval::Z_CROSSHAIR,
+    g_logic::{AimFocusTimer, DartsLeft, MouseOnScreen},
+    g_zval::Z_CROSSHAIR,
 };
 
 pub fn focus_aim(
+    mut r_timer: ResMut<AimFocusTimer>,
+    r_time: Res<Time>,
     r_keyboard: ResMut<Input<KeyCode>>,
     r_images: Res<CrosshairImage>,
     mut q_crosshair: Query<&mut Handle<Image>, With<Crosshair>>,
     mut ev_aimfocused: EventWriter<AimFocusedEvent>,
 ) {
     let mut img_handle = q_crosshair.single_mut();
-    
-    if r_keyboard.pressed(KeyCode::Space) {
+
+    let can_focus = r_timer.timer.finished().not();
+
+    if r_keyboard.pressed(KeyCode::Space) && can_focus {
         ev_aimfocused.send(AimFocusedEvent(true));
         *img_handle = r_images.focused.clone();
+
+        // Tick focus timer
+        r_timer.timer.tick(r_time.delta());
+
     } else {
         ev_aimfocused.send(AimFocusedEvent(false));
         *img_handle = r_images.unfocused.clone();
@@ -66,11 +77,15 @@ pub fn move_mouse(
 pub fn shoot_dart(
     r_mbuttons: Res<Input<MouseButton>>,
     mut r_darts_left: ResMut<DartsLeft>,
+    mut r_timer: ResMut<AimFocusTimer>,
     mut ev_dartshot: EventWriter<DartShotEvent>,
 ) {
     if r_mbuttons.just_pressed(MouseButton::Left) {
-        // Send event
+        // Send events
         ev_dartshot.send(DartShotEvent(true));
+
+        // Reset Focus timer
+        r_timer.timer.reset();
 
         // Decrease dart count
         r_darts_left.decrease();
