@@ -3,19 +3,11 @@ use std::ops::Sub;
 use bevy::prelude::*;
 
 use crate::{
-    e_board::{Sections, BOARD_CENTER, BOARD_RADIUS},
+    e_board::{Sections, BOARD_CENTER, BOARD_RADIUS, R_BULEYE, R_HALBEY, R_DOBFAR, R_TRINEA, R_DOBNEA, R_TRIFAR},
     e_crosshair::Crosshair,
     z_utils::{normalize, round_to_two}, g_events::{AimFocusedEvent, DartShotEvent},
 };
 use rand::Rng;
-
-// Radii definition of the rings (normalized, with respect to board's center)
-pub const R_BULEYE: f32 = 0.01; // Bullseye
-pub const R_HALBEY: f32 = 0.02; // Half-Bullseye
-pub const R_TRINEA: f32 = 0.10; // Treble-near
-pub const R_TRIFAR: f32 = 0.11; // Treble-far
-pub const R_DOBNEA: f32 = 0.17; // Double-near
-pub const R_DOBFAR: f32 = 0.18; // Double-far
 
 #[derive(Resource)]
 pub struct MousePosition(Vec2);

@@ -8,6 +8,14 @@ pub const BOARD_CENTER: Vec2 = Vec2::new(-25., 0.);
 pub const BOARD_RADIUS: f32 = 300_f32;
 const SECTION_ARC: f32 = 18_f32; // 20 sections divided by 360 = 18
 
+// Radii definition of the rings (normalized, with respect to board's center)
+pub const R_BULEYE: f32 = 0.01; // Bullseye
+pub const R_HALBEY: f32 = 0.02; // Half-Bullseye
+pub const R_TRINEA: f32 = 0.10; // Treble-near
+pub const R_TRIFAR: f32 = 0.11; // Treble-far
+pub const R_DOBNEA: f32 = 0.17; // Double-near
+pub const R_DOBFAR: f32 = 0.18; // Double-far
+
 pub struct Section {
     pub start: f32,
     pub end: f32,
