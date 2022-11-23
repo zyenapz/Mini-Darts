@@ -11,5 +11,16 @@ pub fn setup_window(mut commands: Commands, mut windows: ResMut<Windows>) {
     window.set_cursor_grab_mode(CursorGrabMode::Confined);
 
     // Setup camera
-    commands.spawn(Camera2dBundle::default()).insert(MainCamera);
+    commands
+        .spawn(Camera2dBundle {
+            transform: Transform {
+                translation: Vec3 {
+                    z: 999.,
+                    ..default()
+                },
+                ..default()
+            },
+            ..default()
+        })
+        .insert(MainCamera);
 }
